@@ -15,10 +15,21 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  *
  * The array layout, set by the pipeline:
  *
- *   [0] valid flag   [1] tx deg   [2] ty deg      [3] distance m
- *   [4] cx px        [5] cy px    [6] radius px   [7] circularity 0..1
+ *   [0] source      0 none, 1 contour path, 2 Hough fallback
+ *   [1] tx deg      [2] ty deg      [3] distance m
+ *   [4] cx px       [5] cy px       [6] radius px
+ *   [7] confidence  0..1 -- circularity on the contour path, disk fill on the
+ *                   Hough path. Different measures, hence different gates.
+ *
+ * Source 2 means the ball was fused into a same-hue blob -- a bumper, a wall,
+ * another ball -- and was recovered by a Hough pass from inside it. A real
+ * detection, but the degraded path: gated looser, and its range is worth less.
  */
 public class LimelightBallTracker {
+
+    public static final int SOURCE_NONE    = 0;
+    public static final int SOURCE_CONTOUR = 1;
+    public static final int SOURCE_HOUGH   = 2;
 
     /** Reject a result older than this; a stale frame aims at where the ball WAS. */
     private static final long MAX_STALENESS_MS = 200;
@@ -27,7 +38,8 @@ public class LimelightBallTracker {
      * Tighter than the pipeline's own MIN_CIRC of 0.65. The pipeline decides what to
      * draw on the stream; the robot decides what to drive at.
      */
-    private static final double MIN_CIRCULARITY = 0.75;
+    private static final double MIN_CONF_CONTOUR = 0.75;
+    private static final double MIN_CONF_HOUGH   = 0.55;
 
     private final Limelight3A limelight;
 
@@ -42,16 +54,21 @@ public class LimelightBallTracker {
 
     /** One detected ball. Angles in degrees, range in meters. */
     public static class Target {
-        public final double tx, ty, distanceMeters, radiusPx, circularity;
+        public final double tx, ty, distanceMeters, radiusPx, confidence;
+        public final int source;
 
         Target(double tx, double ty, double distanceMeters,
-               double radiusPx, double circularity) {
+               double radiusPx, double confidence, int source) {
             this.tx = tx;
             this.ty = ty;
             this.distanceMeters = distanceMeters;
             this.radiusPx = radiusPx;
-            this.circularity = circularity;
+            this.confidence = confidence;
+            this.source = source;
         }
+
+        /** True when this came out of a same-hue blob; range is less trustworthy. */
+        public boolean isFused() { return source == SOURCE_HOUGH; }
     }
 
     /** @return the current target, or null when there is nothing worth driving at. */
@@ -62,9 +79,20 @@ public class LimelightBallTracker {
 
         double[] py = result.getPythonOutput();
         if (py == null || py.length < 8) return null;
-        if (py[0] < 0.5) return null;
-        if (py[7] < MIN_CIRCULARITY) return null;
 
-        return new Target(py[1], py[2], py[3], py[6], py[7]);
+        int source = (int) Math.round(py[0]);
+        if (source == SOURCE_NONE) return null;
+
+        double minConf;
+        if (source == SOURCE_CONTOUR) {
+            minConf = MIN_CONF_CONTOUR;
+        } else if (source == SOURCE_HOUGH) {
+            minConf = MIN_CONF_HOUGH;
+        } else {
+            return null;   // pipeline newer than this file; do not guess
+        }
+        if (py[7] < minConf) return null;
+
+        return new Target(py[1], py[2], py[3], py[6], py[7], source);
     }
 }

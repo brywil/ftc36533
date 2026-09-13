@@ -9,6 +9,9 @@ fragments. A morphological close sized to the hole diameter welds it into one
 silhouette before contour finding, and the shape tests run on the convex hull
 because a lattice edge has an enormous, noisy perimeter that destroys the usual
 4*pi*A/P^2 circularity metric.
+
+Every constant below was exercised against synthetic lattice frames by
+tools/selftest.py -- see that file for what those frames do and do not prove.
 """
 
 import cv2
@@ -19,23 +22,77 @@ import math
 HSV_LOW  = np.array([20,  90,  80], dtype=np.uint8)   # yellow: H 20-35 in OpenCV's 0-179 scale
 HSV_HIGH = np.array([35, 255, 255], dtype=np.uint8)
 
-CLOSE_K       = 9      # >= waffle hole width in px at your farthest working range
-MIN_AREA      = 300    # px^2, rejects field-light glints and yellow tape specks
-MIN_FILL      = 0.55   # contour area / convex hull area -- lattice is porous, so this is low
-MIN_CIRC      = 0.65   # hull area / (pi r^2) from minEnclosingCircle
-MAX_CANDS     = 3
+SPECK_K  = 3      # kills isolated yellow noise BEFORE the close can bridge it to the ball
+CLOSE_K  = 9      # >= waffle hole width in px at your farthest working range
+CLOSE_IT = 1      # a second iteration doubles the bridging reach; measured worse
+OPEN_K   = 5      # final cleanup of anything the close welded together
+
+MIN_AREA = 120    # px^2. A ball at 3.3 m is ~314 px^2; yellow specks measure ~20.
+MIN_FILL = 0.55   # contour area / convex hull area -- lattice is porous, so this is low
+MIN_CIRC = 0.65   # hull area / (pi r^2) from minEnclosingCircle
+
+# When a big yellow blob fails the shape tests, it is usually the ball FUSED to a
+# same-hue object (a bumper, a wall, another ball). A Hough pass recovers the
+# circle from inside the fused blob. Bounded to that case so it does not run every
+# frame: the Limelight CPU cannot afford HoughCircles at full rate.
+HOUGH_FALLBACK   = True
+HOUGH_MIN_BLOB   = 4000    # px^2 of rejected blob before it is worth the attempt
+HOUGH_MIN_FILL   = 0.55    # of the proposed disk must actually be yellow
 
 BALL_DIAMETER_M = 0.1778   # <-- MEASURE YOUR BALL. 7 in placeholder; distance scales linearly off this.
 HFOV_DEG        = 82.0     # LL3A stock lens
 
-_focal_px = None           # derived from frame width on the first frame
+# Focal length in px, derived from frame width. Keyed on the width so that changing
+# the pipeline's capture resolution cannot leave a stale value cached.
+_focal_cache = {}
 
 
 def _focal(width):
-    global _focal_px
-    if _focal_px is None:
-        _focal_px = (width / 2.0) / math.tan(math.radians(HFOV_DEG) / 2.0)
-    return _focal_px
+    if width not in _focal_cache:
+        _focal_cache[width] = (width / 2.0) / math.tan(math.radians(HFOV_DEG) / 2.0)
+    return _focal_cache[width]
+
+
+def _build_mask(image):
+    hsv  = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, HSV_LOW, HSV_HIGH)
+
+    # Order matters. Specks first, or the close drags them into the ball's hull and
+    # inflates the radius -- measured 9.2% radius error the other way round.
+    if SPECK_K > 1:
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (SPECK_K, SPECK_K)))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (CLOSE_K, CLOSE_K)), iterations=CLOSE_IT)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE, (OPEN_K, OPEN_K)))
+    return mask
+
+
+def _hough_recover(mask, image):
+    """Find a circle inside a blob that failed the shape tests. None if unconvincing."""
+    blur = cv2.GaussianBlur(mask, (9, 9), 2)
+    circles = cv2.HoughCircles(blur, cv2.HOUGH_GRADIENT, dp=1.5, minDist=60,
+                               param1=100, param2=40, minRadius=12, maxRadius=200)
+    if circles is None:
+        return None
+
+    cx, cy, r = circles[0][0]          # strongest accumulator peak
+    if r <= 1:
+        return None
+
+    # Do not trust the accumulator alone -- require the proposed disk to actually be
+    # yellow. Hough will happily fit a circle to an arc of a rectangle.
+    probe = np.zeros(mask.shape, dtype=np.uint8)
+    cv2.circle(probe, (int(cx), int(cy)), int(r), 255, -1)
+    disk = float(np.count_nonzero(probe))
+    if disk <= 0:
+        return None
+    fill = float(np.count_nonzero(cv2.bitwise_and(probe, mask))) / disk
+    if fill < HOUGH_MIN_FILL:
+        return None
+
+    return float(cx), float(cy), float(r), fill
 
 
 def runPipeline(image, llrobot):
@@ -43,23 +100,16 @@ def runPipeline(image, llrobot):
     h, w = image.shape[:2]
     f = _focal(w)
 
-    # 1. color gate in HSV
-    hsv  = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(hsv, HSV_LOW, HSV_HIGH)
-
-    # 2. weld the waffle lattice into one silhouette, then drop speckle
-    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (CLOSE_K, CLOSE_K))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, k, iterations=2)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN,
-                            cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
-
+    mask = _build_mask(image)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if len(contours) == 0:
-        return np.array([[]]), image, llpython
 
-    # 3. score candidates on shape, not just size
+    # Score EVERY contour over the area floor, not the top N by area. Ranking by area
+    # and truncating lets a yellow bumper or a strip of tape starve the real ball --
+    # measured: at 1.6 m the ball was only the third-largest contour in frame.
     best = None
-    for c in sorted(contours, key=cv2.contourArea, reverse=True)[:MAX_CANDS]:
+    best_hull = None
+    largest_rejected = 0.0
+    for c in contours:
         area = cv2.contourArea(c)
         if area < MIN_AREA:
             continue
@@ -76,28 +126,42 @@ def runPipeline(image, llrobot):
         fill = area / hull_area                      # porosity of the lattice
         circ = hull_area / (math.pi * r * r)         # roundness of the silhouette
         if fill < MIN_FILL or circ < MIN_CIRC:
+            largest_rejected = max(largest_rejected, hull_area)
             cv2.drawContours(image, [hull], -1, (0, 0, 255), 1)   # rejected, drawn red
             continue
 
         if best is None or r > best[2]:
-            best = (cx, cy, r, c, fill, circ)
+            best = (cx, cy, r, circ)
+            best_hull = c
 
+    source = 1
     if best is None:
-        return np.array([[]]), image, llpython
+        if not (HOUGH_FALLBACK and largest_rejected >= HOUGH_MIN_BLOB):
+            return np.array([[]]), image, llpython
+        rec = _hough_recover(mask, image)
+        if rec is None:
+            return np.array([[]]), image, llpython
+        cx, cy, r, fill = rec
+        best = (cx, cy, r, fill)
+        best_hull = cv2.ellipse2Poly((int(cx), int(cy)), (int(r), int(r)),
+                                     0, 0, 360, 10).reshape(-1, 1, 2)
+        source = 2
 
-    cx, cy, r, contour, fill, circ = best
+    cx, cy, r, circ = best
 
-    # 4. geometry
+    # geometry
     tx   = math.degrees(math.atan2(cx - w / 2.0, f))
     ty   = math.degrees(math.atan2(h / 2.0 - cy, f))
     dist = (BALL_DIAMETER_M * f) / (2.0 * r)
 
-    # 5. overlay
-    cv2.circle(image, (int(cx), int(cy)), int(r), (0, 255, 0), 2)
+    # overlay
+    color = (0, 255, 0) if source == 1 else (0, 200, 255)
+    cv2.circle(image, (int(cx), int(cy)), int(r), color, 2)
     cv2.circle(image, (int(cx), int(cy)), 3, (255, 0, 255), -1)
-    cv2.putText(image, "%.2fm  tx %.1f  ty %.1f" % (dist, tx, ty),
+    cv2.putText(image, "%.2fm  tx %.1f  ty %.1f%s" % (dist, tx, ty,
+                "" if source == 1 else "  [hough]"),
                 (int(cx - r), int(cy - r) - 8),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
-    llpython = [1, tx, ty, dist, cx, cy, r, circ]
-    return contour, image, llpython
+    llpython = [source, tx, ty, dist, cx, cy, r, circ]
+    return best_hull, image, llpython
