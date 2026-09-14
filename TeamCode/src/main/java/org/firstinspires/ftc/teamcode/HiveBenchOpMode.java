@@ -34,7 +34,7 @@ import java.util.Locale;
  *   X  reset the observed tilt range
  *   Y  reset the TIP counter
  */
-@TeleOp(name = "HIVE Bench (AprilTag PoC)", group = "Bringup")
+@TeleOp(name = "3. HIVE Bench (AprilTag)", group = "Bringup")
 public class HiveBenchOpMode extends LinearOpMode {
 
     /** Must match the Robot Configuration name of your USB camera. */

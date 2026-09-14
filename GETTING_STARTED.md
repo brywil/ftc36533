@@ -117,17 +117,49 @@ Save the configuration and **activate** it.
 A robot with a motor wired backwards will drive into a wall at full speed, and it is
 never obvious which motor is wrong until you look.
 
-Run the **Mecanum TeleOp** OpMode, press START, then:
+Run the OpModes **in the order they're numbered**. Each one only asks you to get one
+more thing right, so when something breaks you know what caused it.
+
+### `0. Hardware Check` — does the robot agree with the code?
+
+This one does not drive. It lists the motor names your configuration actually has,
+which of them this code recognises, and whether the IMU is there. If a name is
+misspelled, this is where you find out — in plain words, not a screen of red text.
+
+Then press START and use the bumpers to pick a motor and hold **A** to spin it slowly.
+Watch which wheel turns. If the wheel that turns isn't the one named on screen, two
+motors are plugged into each other's ports. Fix that in the configuration, not in code.
+
+Letting go of A stops the motor, so if something looks wrong, just take your thumb off.
+
+### `1. Simple Drive` — make a wheel turn when a kid moves the stick
+
+The smallest possible driving program. No IMU, no modes, no field-centric — every one
+of those is another thing that can be broken on day one, and right now you only want to
+prove that a joystick can turn a wheel.
+
+It works with four motors *or* two, and it accepts either our motor names or the ones
+in goBILDA's sample code. If it can't find the motors it says so and tells you to run
+Hardware Check.
+
+- Left stick — drive (and slide sideways, if you have mecanum wheels)
+- Right stick left/right — turn
+
+Top speed is capped at 50% on purpose. Fast robots break things and scare people.
+
+**When this works, you have had a successful first session.** Everything after this is
+an improvement on something that already moves.
+
+### Then the two checks that matter
 
 1. **Push the left stick forward.** All four wheels must spin *forward*.
    - If one spins backwards, that motor is reversed. Tell a mentor which one — it's a
-     one-line fix in `MecanumDrivebase.java`.
-2. **Push the left stick right.** Looking down from above, the wheels should make an
-   **X** shape — front-left and back-right going one way, the other two going the
-   other way.
-   - If the robot tries to *spin* instead, two motors are plugged into the wrong
-     ports. Swap them in the configuration, not in the code.
-3. **Only now** put it on the floor.
+     one-line fix.
+2. **Push the left stick right** (mecanum only). Looking down from above, the wheels
+   should make an **X** shape.
+   - If the robot tries to *spin* instead, two motors are in the wrong ports.
+
+Only now put it on the floor.
 
 If it drives fine forwards but crabs sideways whenever you turn, a wheel's rollers are
 mounted the wrong way round. That's a **building** problem, not a code problem — the
@@ -135,9 +167,10 @@ rollers on the four wheels should form an X when you look down at the robot.
 
 ---
 
-## Part 4 — The controls
+## Part 4 — The real driving code
 
-**Mecanum TeleOp**
+`2. Mecanum TeleOp` is the one you'll actually compete with. It needs all four motors
+**and** the IMU.
 
 | Control | What it does |
 |---|---|
@@ -154,8 +187,6 @@ spins around. Most drivers find this much easier.
 If the robot starts drifting the wrong way later in a match, press `options` again
 while it's pointing away from you. That re-zeroes it.
 
----
-
 ## Part 5 — The camera
 
 Two separate things, don't mix them up:
@@ -164,8 +195,8 @@ Two separate things, don't mix them up:
 `snapscript/yellow_waffle_ball.py`. You paste it into the Limelight's web page, in the
 Python tab. The robot then asks the camera "do you see a ball, and where?"
 
-**Finding the HIVE** runs *on the Control Hub* using a regular webcam. Run the
-**HIVE Bench (AprilTag PoC)** OpMode and point the camera at a HIVE cell's sticker.
+**Finding the HIVE** runs *on the Control Hub* using a regular webcam. Run
+`3. HIVE Bench (AprilTag)` and point the camera at a HIVE cell's sticker.
 This one is still being built and needs measuring before it's useful — a mentor should
 be with you for it.
 
@@ -187,6 +218,7 @@ field.
 | What you see | What it usually means | What to do |
 |---|---|---|
 | OpMode isn't in the list | The app didn't get installed, or it didn't build | Run `./build.sh` again and read the last few lines |
+| "Could not find the drive motors" | Names don't match | Run `0. Hardware Check` — it shows what names you actually have |
 | "Unable to find a hardware device with name..." | A name in the configuration doesn't match the code | Check Part 2, character by character |
 | Robot drives, but sideways is wrong | Two motors swapped in the configuration | Swap them in the configuration |
 | One wheel spins the wrong way | That motor needs reversing in code | Ask a mentor, note *which* wheel |

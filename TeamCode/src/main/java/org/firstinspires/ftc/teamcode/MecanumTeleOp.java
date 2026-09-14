@@ -24,7 +24,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
  *  3. Only then set it on the floor. A mecanum chassis with one roller set
  *     mounted backwards drives fine forward and crabs sideways on every turn.
  */
-@TeleOp(name = "Mecanum TeleOp", group = "Drive")
+@TeleOp(name = "2. Mecanum TeleOp (field-centric)", group = "Drive")
 public class MecanumTeleOp extends LinearOpMode {
 
     /**
