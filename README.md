@@ -172,6 +172,70 @@ So at 640x480 the practical ceiling is roughly **1.5 m**, and the way to buy ran
 capture resolution, not a lower `MIN_AREA` — dropping the floor lets specks back in.
 Doubling the width doubles the focal length and therefore the apparent radius.
 
+## HIVE localization (proof of concept)
+
+| file | what |
+|---|---|
+| `TeamCode/.../HiveGeometry.java` | every constant, split into quoted-from-manual and must-measure |
+| `TeamCode/.../HiveTracker.java` | cluster detection plus the settled/mid-swing gate |
+| `TeamCode/.../HiveBenchOpMode.java` | bench bring-up, runs on a single lifted CELL |
+| `tools/hive_gate_sim.py` | sweeps the arc and checks the gate thresholds offline |
+
+### Why the HIVE can be localized against
+
+It is a seesaw on a fixed pivot with two stable endpoints held by dampers, so it
+**never rests in between**. A settled HIVE puts its tag clusters at one of two known
+poses; anything else is a swing in progress. The danger is that a mid-swing solve
+does not fail — it returns a confident pose against a cluster that is not where the
+map says it is, and your position estimate teleports.
+
+Both CELLS face downward at all times and are visible together, so the cluster ID
+tells you *which CELL*, never *which state*. State comes from which CELL is currently
+low.
+
+### The gate
+
+Two independent, gravity-referenced quantities, which must agree:
+
+- **tilt** — the tag plane sits 30° off horizontal when settled and sweeps 60° when not
+- **height** — the tag plane is at 25.5 in. or 44.3 in., **18.8 in. apart**, nothing legitimate between
+
+Neither depends on the robot's estimated pose, so neither can be corrupted by the
+thing they protect. `hive_gate_sim.py` sweeps the whole arc: with ±12° and ±6 in.
+tolerances, **60% of the travel is rejected** and each endpoint keeps 12° of slack.
+The two tests never disagree geometrically — so a disagreement in the field means a
+bad solve or a miscalibrated camera, which is why the tracker refuses rather than
+picking a winner.
+
+### Bench procedure — one CELL, no field required
+
+Nothing here is field-referenced, so one lifted CELL with one cluster of four tags
+runs every check.
+
+1. **Calibrate.** `CAMERA_PITCH_DEG` and the sign of `ftcPose.pitch` cannot be derived,
+   only observed. Hold the CELL at each endpoint, press A and B; the OpMode prints the
+   constants to paste into `HiveGeometry`. It also checks that your two captures
+   straddle zero and span ~60° — if the midpoint is off zero, your camera pitch is
+   wrong by exactly that much, and every tilt reading is biased the same way (which
+   presents as "always mid-swing", not as a calibration error).
+2. **Prove the gate.** Swing the CELL by hand and watch SETTLED drop out in the middle
+   and return at the ends.
+3. **Map the envelope.** Walk the camera back with a tape measure and find where the
+   cluster stops solving at 100%. That number decides where the camera gets mounted.
+
+### What this does and does not do
+
+It reports range, bearing, slot, and a settled verdict. It does **not** yet output a
+field pose: `HiveGeometry.SLOT_POSES_MEASURED` is `false` because the four slot poses
+have to be measured off a real field first. §9.9 says the Reference Holes are the
+intended way to do that, which is also why the SDK ships every cluster at (0,0,0).
+
+It uses the **FTC SDK vision pipeline with a USB webcam** (configured as `Webcam 1`),
+not the Limelight — the SDK has native four-tag cluster fusion via
+`getBioBuzzTagLibrary()`, and the 13 in. baseline across a cluster is what makes yaw
+trustworthy on 3.25 in. tags. A Limelight path would need a hand-authored `.fmap` and
+its own cluster fusion; worth doing later, not for a proof of concept.
+
 ## Running the vision code without a camera
 
 ```bash
