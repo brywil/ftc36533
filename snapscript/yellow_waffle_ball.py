@@ -1,9 +1,12 @@
-"""Limelight 3A SnapScript: yellow waffle-ball detector.
+"""Limelight 3A SnapScript: POLLEN detector for FTC BIOBUZZ (2026-27).
+
+POLLEN is a 2.8 in. yellow Gopher ResisDent ball -- a perforated lattice sphere,
+which is the entire reason this is not a plain blob detector.
 
 Paste the body of this file into the Python tab of a Limelight pipeline, or
 upload it directly. The camera calls runPipeline() once per frame.
 
-The waffle lattice is the reason this is not a plain blob detector: the ball is
+The lattice is the reason this is not a plain blob detector: the ball is
 not a solid color patch, so a raw HSV mask comes back as a ring of disconnected
 fragments. A morphological close sized to the hole diameter welds it into one
 silhouette before contour finding, and the shape tests run on the convex hull
@@ -39,7 +42,11 @@ HOUGH_FALLBACK   = True
 HOUGH_MIN_BLOB   = 4000    # px^2 of rejected blob before it is worth the attempt
 HOUGH_MIN_FILL   = 0.55    # of the proposed disk must actually be yellow
 
-BALL_DIAMETER_M = 0.1778   # <-- MEASURE YOUR BALL. 7 in placeholder; distance scales linearly off this.
+# BIOBUZZ POLLEN, from the Section 16 glossary: "2.8 in. (7.1 cm) Gopher
+# ResisDent(TM) polyethylene balls in yellow". NECTAR is the other element --
+# approximately 3.6 in. (9.1 cm), red or blue -- so the hue gate above rejects it
+# without any extra work. Distance scales linearly off this number.
+BALL_DIAMETER_M = 0.071
 HFOV_DEG        = 82.0     # LL3A stock lens
 
 # Focal length in px, derived from frame width. Keyed on the width so that changing

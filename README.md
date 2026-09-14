@@ -1,8 +1,15 @@
 # ftc36533
 
-FTC team 36533 robot code. Right now that is a four-motor mecanum drivebase and a
-Limelight 3A vision pipeline that finds a yellow waffle ball, but this repo is meant
-to be the general home for the team's code — new subsystems go here.
+FTC team 36533 robot code for **BIOBUZZ** (2026-27). Right now that is a four-motor
+mecanum drivebase and a Limelight 3A pipeline that finds POLLEN, but this repo is the
+general home for the team's code — new subsystems go here.
+
+The two BIOBUZZ scoring elements, from the Section 16 glossary:
+
+| element | spec | why it matters here |
+|---|---|---|
+| **POLLEN** | 2.8 in. (7.1 cm) Gopher ResisDent™ polyethylene balls **in yellow** | what the pipeline detects; the lattice is why it isn't a blob detector |
+| **NECTAR** | ~3.6 in. (9.1 cm), red or blue | bigger and a different hue, so the yellow gate rejects it for free |
 
 | path | runs on |
 |---|---|
@@ -142,9 +149,28 @@ LEDs desaturates toward white at the specular highlight and toward orange at the
 terminator. Widen `S`/`V` before you widen `H` — widening `H` is what starts pulling in
 orange and green field elements.
 
-`BALL_DIAMETER_M` is a placeholder. Measure your ball; distance scales linearly off it.
-`HFOV_DEG` is the LL3A stock lens, and focal length in px is derived from the frame
-width, so it follows whatever capture resolution the pipeline is set to.
+`BALL_DIAMETER_M` is 0.071 m, the official POLLEN diameter. Distance scales linearly off
+it, so this is the one constant you must not eyeball. `HFOV_DEG` is the LL3A stock lens,
+and focal length in px is derived from the frame width, so it follows whatever capture
+resolution the pipeline is set to.
+
+### POLLEN is small — know your range budget
+
+At 2.8 in., POLLEN goes under the detector's area floor sooner than you would guess.
+Apparent radius and contour area against range, by Limelight capture width:
+
+| range | 640x480 | 1280x960 |
+|---|---|---|
+| 0.30 m | r 43.6 px, area 5961 | r 87.1 px, area 23845 |
+| 0.50 m | r 26.1 px, area 2146 | r 52.3 px, area 8584 |
+| 1.00 m | r 13.1 px, area 537 | r 26.1 px, area 2146 |
+| 1.50 m | r 8.7 px, area 238 | r 17.4 px, area 954 |
+| 2.00 m | r 6.5 px, area 134 | r 13.1 px, area 537 |
+| 3.00 m | r 4.4 px, **area 60 — under `MIN_AREA`** | r 8.7 px, area 238 |
+
+So at 640x480 the practical ceiling is roughly **1.5 m**, and the way to buy range is
+capture resolution, not a lower `MIN_AREA` — dropping the floor lets specks back in.
+Doubling the width doubles the focal length and therefore the apparent radius.
 
 ## Running the vision code without a camera
 
@@ -176,11 +202,12 @@ Limelight method it calls was checked against those jars with `javap`.
 **Not verified:** nothing has run on a Control Hub. No robot, no camera, no field.
 
 **Vision — exercised against synthetic frames**, `selftest.py` passes clean: detected
-across apparent radii of 10–130 px (3.3 m down to 0.25 m at the placeholder ball
-diameter), center within 5% of radius, radius error ≤ 4.8%, all four distractor classes
+across apparent radii of 10–130 px, which at the real POLLEN diameter is 1.31 m down to
+0.10 m; center within 5% of radius, radius error ≤ 4.8%, all four distractor classes
 rejected, and a ball fused to a same-hue slab recovered to within 3.2 px and −2.2%
-radius. Still unverified on hardware: the HSV bounds, `BALL_DIAMETER_M`, and the Hough
-fallback's cost on the Limelight's own CPU.
+radius. Still unverified on hardware: the HSV bounds and the Hough fallback's cost on
+the Limelight's own CPU. `BALL_DIAMETER_M` is now the official figure rather than a
+guess, but the tolerance on a moulded ball is real — measure a few.
 
 ## Troubleshooting
 
