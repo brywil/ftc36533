@@ -48,9 +48,16 @@ public final class HiveGeometry {
 
     /**
      * The four AprilTag Clusters, by the ID of their first member (Section 9.9).
-     * Each CELL carries its own cluster on its bottom face, so the ID range tells
-     * you WHICH CELL you are looking at -- never which state the HIVE is in. Both
-     * CELLS of a HIVE face downward at all times and are visible together.
+     *
+     * Each CELL carries its own cluster on its bottom face, and every ID is unique
+     * to one CELL. So the ID alone tells you which ALLIANCE and which CELL, but not
+     * which way the HIVE is currently tipped -- both CELLS face downward at all
+     * times and can be seen together.
+     *
+     * Combine the ID with the slot (which is measured from the tilt and height) and
+     * you have the whole picture: cluster 30-33 seen LOW means the red HIVE is
+     * tipped far-cell-down, and seen HIGH means the other state. That is why one
+     * cluster on its own is enough -- you never need both CELLS in frame.
      */
     public enum Cell {
         RED_FAR      (30, "RED SCORING",   Alliance.RED),
