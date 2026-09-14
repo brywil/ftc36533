@@ -17,18 +17,22 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
  *
  * and, for field-centric driving, the built-in "imu" on the Control Hub's I2C bus 0.
  *
- * Wiring convention: this class reverses the LEFT side, which is correct when all
- * four motors are mounted with their output shafts pointing outward from the chassis
- * (the usual goBILDA/REV layout). If your robot strafes when you push forward, you
- * have a direction wrong -- see the check in the class comment of MecanumTeleOp.
+ * The motors on the left are told to run backwards. That sounds odd, but the left
+ * and right motors face opposite ways on the robot, so "forwards" for one is
+ * "backwards" for the other. This is correct for the normal goBILDA/REV build.
+ *
+ * If a wheel spins the wrong way on your robot, fix it here -- but test on blocks
+ * first. GETTING_STARTED.md, Part 3, walks through how to check.
  */
 public class MecanumDrivebase {
 
     /**
-     * Mecanum rollers make strafing weaker than forward travel for the same motor
-     * power -- friction and the 45-degree roller contact both work against it. This
-     * scales the strafe axis up to compensate. Tune it by driving a taped square:
-     * raise it if the square comes out short in the strafe direction.
+     * Sliding sideways is weaker than driving forwards, even when the motors are
+     * working just as hard. The angled rollers waste some of the push. This number
+     * gives sideways a boost to even things up.
+     *
+     * To tune it: lay tape on the floor in a square, drive around it, and if the
+     * sideways sides come out short, raise this a little.
      */
     public static final double STRAFE_GAIN = 1.1;
 
@@ -49,8 +53,9 @@ public class MecanumDrivebase {
         frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
         backRight.setDirection(DcMotorSimple.Direction.FORWARD);
 
-        // BRAKE keeps the robot where the driver left it. FLOAT coasts, which feels
-        // smoother but drifts on a bumpy field.
+        // BRAKE makes the motors stop quickly when you let go of the stick. The
+        // other option, FLOAT, lets the robot coast -- smoother, but it drifts, and
+        // drifting off a scoring position loses points.
         setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         for (DcMotor m : new DcMotor[] { frontLeft, frontRight, backLeft, backRight }) {
@@ -66,11 +71,16 @@ public class MecanumDrivebase {
     }
 
     /**
-     * Drive in the robot's own frame: +forward is the robot's nose, +strafe is its
-     * right, +turn is clockwise seen from above.
+     * Drive using the robot's own directions: +forward is where the nose points,
+     * +strafe is to its right, +turn spins it clockwise seen from above. All three
+     * numbers run from -1 to +1.
      *
-     * All three inputs are -1..1. The denominator normalises them together, so a
-     * full-stick diagonal keeps its direction instead of clipping into a curve.
+     * The "denominator" line below is the important part. If you push the stick all
+     * the way diagonally AND turn at the same time, the maths can ask a motor for
+     * more power than it actually has. The motor just gives what it can, and the
+     * robot curves off somewhere you did not ask for. Dividing all four by the
+     * biggest request keeps them in proportion -- so the robot goes exactly where
+     * you pointed, just a little slower.
      */
     public void driveRobotCentric(double forward, double strafe, double turn) {
         strafe *= STRAFE_GAIN;
@@ -86,9 +96,13 @@ public class MecanumDrivebase {
     }
 
     /**
-     * Drive in the FIELD's frame: +forward is away from the driver station no matter
-     * which way the robot is pointing. Depends entirely on the IMU heading, so call
-     * {@link #resetHeading()} with the robot aimed downfield before the match.
+     * Drive using the FIELD's directions: pushing the stick away from you always
+     * sends the robot away from you, even if it has spun around. Most drivers find
+     * this much easier than thinking about which way the nose points.
+     *
+     * This only works if the robot knows which way it is facing, which it learns
+     * from the IMU. Point the robot away from the drivers and call resetHeading()
+     * before the match, or "away" will mean the wrong direction.
      */
     public void driveFieldCentric(double forward, double strafe, double turn) {
         double heading = getHeading();

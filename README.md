@@ -17,6 +17,13 @@ The two BIOBUZZ scoring elements, from the Section 16 glossary:
 | `snapscript/yellow_waffle_ball.py` | the **camera** — paste into the Python tab of a Limelight pipeline |
 | `tools/` | your laptop — offline vision harness, no camera needed |
 | `install.sh`, `build.sh` | your laptop — toolchain bootstrap and APK build |
+| `GETTING_STARTED.md` | **start here if you are new** — plain-language setup and driving guide |
+
+> **New to this?** Read [GETTING_STARTED.md](GETTING_STARTED.md) first. It explains
+> the vocabulary, how to get the code onto the robot, and what to do when something
+> breaks. This README is the reference: it records *why* things are the way they are
+> and what was measured. Both are meant to be readable without a degree — if a term
+> here isn't explained, that's a bug, tell us.
 
 ## Quick start
 
@@ -95,17 +102,23 @@ toggles field- vs robot-centric.
 
 ### Why it isn't a plain blob detector
 
-The waffle lattice means the ball is not a solid color patch. A raw HSV mask comes back
-as a ring of disconnected fragments, every one of them too small to survive an area
-filter. Two things fix that:
+POLLEN balls have holes all over them, like a wiffle ball. That breaks the obvious
+approach, which would be "find the yellow blob". Search for yellow and you don't get a
+circle — you get a ring of little disconnected yellow scraps with gaps between them,
+and every scrap is too small to look like a ball.
 
-- a **morphological close** sized to the hole diameter, which welds the lattice into one
-  silhouette before contour finding;
-- **convex-hull** shape tests instead of perimeter circularity, because a lattice edge
-  has an enormous, noisy perimeter that wrecks the usual `4*pi*A/P^2` metric.
+Two things fix it:
 
-The detector keeps the largest candidate that passes both a porosity test
-(`contour area / hull area`) and a roundness test (`hull area / pi*r^2`).
+- A **morphological close** — a standard image trick that fills in small gaps. Sized to
+  the width of the holes, it welds the scraps back into one solid shape.
+- **Convex-hull** shape tests. The convex hull is the shape you'd get by stretching a
+  rubber band around the object. We test that instead of the outline itself, because a
+  holey edge is long and jagged, and the usual roundness formula (`4*pi*area/perimeter^2`)
+  gets wrecked by a jagged perimeter. The rubber-band shape ignores the jaggedness.
+
+The detector keeps the biggest candidate that passes two tests: **how solid it is**
+(contour area ÷ hull area — a lattice is holey, so this is allowed to be low) and **how
+round it is** (hull area ÷ the area of a circle drawn around it).
 
 ### Output contract
 

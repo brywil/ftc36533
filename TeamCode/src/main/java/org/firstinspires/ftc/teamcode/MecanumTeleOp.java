@@ -27,7 +27,11 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 @TeleOp(name = "Mecanum TeleOp", group = "Drive")
 public class MecanumTeleOp extends LinearOpMode {
 
-    /** Stick motion below this is treated as zero, so a worn stick doesn't creep. */
+    /**
+     * Gamepad sticks rarely read exactly zero when you let go -- worn ones especially.
+     * Anything smaller than this counts as "not touched", so the robot sits still
+     * instead of creeping across the field on its own.
+     */
     private static final double DEADBAND = 0.05;
 
     /** Multiplier at full precision trigger. */
@@ -53,8 +57,11 @@ public class MecanumTeleOp extends LinearOpMode {
             double strafe  = deadband(gamepad1.left_stick_x);
             double turn    = deadband(gamepad1.right_stick_x);
 
-            // Squaring preserves sign but softens the middle of the stick, which is
-            // where fine positioning happens. Full deflection is still full power.
+            // Multiplying the stick value by itself makes small pushes much gentler
+            // while a full push still gives full power. That gives you fine control
+            // near the middle of the stick, which is where careful lining-up happens.
+            // (copySign puts the minus sign back, since a negative times a negative
+            // would come out positive and you'd drive the wrong way.)
             forward = square(forward);
             strafe  = square(strafe);
             turn    = square(turn);
