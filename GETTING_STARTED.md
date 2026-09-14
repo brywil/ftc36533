@@ -213,6 +213,66 @@ field.
 
 ---
 
+## Practising the camera on a tennis ball
+
+You don't need POLLEN, a robot, or even the Limelight to learn this. You need a
+yellow ball, a phone, and a laptop.
+
+A tennis ball is a good stand-in. It is 2.6 inches across and POLLEN is 2.8, so it's
+nearly the right size. It is a bit *greener* than POLLEN, which matters — see below.
+
+**1. Take pictures.** Ten or so of the ball on the floor, from different distances and
+in different light. Include some bad ones: far away, in shadow, half behind something.
+The bad ones are the useful ones.
+
+**2. Put them in a folder** on your laptop, then run:
+
+```bash
+cd tools
+../.venv/bin/python check_photos.py ../photos --dump out
+```
+
+This runs the exact same code that runs inside the Limelight camera, and tells you
+what it found in each picture.
+
+**3. When it misses, it tells you which setting is wrong.** This is the important
+part, because there are two completely different problems and they need opposite
+fixes:
+
+| What it says | What's wrong | What to change |
+|---|---|---|
+| "biggest colour blob is at hue 37, your gate stops at 35" | The ball is a **different colour** than the code allows | `--hsv-high 41` |
+| "the colour is RIGHT but the ball is too pale or too dark" | A **lighting** problem, not a colour problem | `--min-sat 60` |
+
+**Do not widen the hue range to fix a lighting problem.** It won't help, and it starts
+letting orange things through — which on a real field means chasing the wrong object.
+
+**4. Watch out for a "found" that's wrong.** If the ball's colour sits right at the
+edge of the range, only part of the ball gets through, the code locks onto that sliver,
+and it reports a distance that is far too big. We measured a ball that should have read
+70 pixels across coming back as 15.8 — a distance **4.5 times too far**, with no error
+message. The tool prints a WARNING when it spots this. Take the warning seriously: a
+confidently wrong number is worse than no number.
+
+**5. Check the distance with a tape measure.** Put the ball exactly 1 metre away and
+see what the tool says. Add `--ball-in 2.6` so it knows a tennis ball is smaller than
+POLLEN.
+
+> The distance is only right if the camera's field of view is set correctly. The
+> default (82 degrees) is the Limelight's lens, not a phone's. For phone pictures add
+> `--hfov 68` or thereabouts. If you don't know your phone's, ignore the distance and
+> trust the found/not-found part, which doesn't depend on it.
+
+**6. Remember you'll do this again.** POLLEN is a slightly different yellow, and every
+gym has different lighting, so these numbers will need redoing on the real thing. That
+is normal and it is not a sign you did it wrong. **The skill you're practising is the
+process, not the numbers** — and the process is exactly the same on the real ball.
+
+Write down the numbers that worked, and where you were when they worked. "hsv-high 41,
+tennis ball, cafeteria, lights on" is a useful note. "41" on its own is not.
+
+---
+
 ## When something goes wrong
 
 | What you see | What it usually means | What to do |
