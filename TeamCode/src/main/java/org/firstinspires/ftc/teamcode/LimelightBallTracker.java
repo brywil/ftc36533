@@ -7,11 +7,12 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
 /**
  * FTC-side read of the SnapScript in snapscript/yellow_waffle_ball.py.
  *
- * FTC does NOT use NetworkTables -- that is the FRC path, and it is what
- * robot/read_llpython.py in this repo speaks. On FTC the Limelight is a hardware
- * device in the Robot Configuration (add it as "Ethernet Device" -> Limelight3A,
- * named "limelight"), and the pipeline's llpython array arrives as
+ * Add the camera to the Robot Configuration as an Ethernet Device -> Limelight3A
+ * named "limelight". The pipeline's llpython array arrives as
  * LLResult.getPythonOutput().
+ *
+ * getLatestResult() returns null until start() has been called, so call start()
+ * in your OpMode's init and stop() when it ends.
  *
  * The array layout, set by the pipeline:
  *
