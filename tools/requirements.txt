@@ -1,2 +1,21 @@
-numpy==1.24.4
+# Only opencv is pinned. numpy is deliberately NOT pinned here, and that is the fix
+# to a bug that bit us, not laziness.
+#
+# opencv-python-headless already declares the right numpy bound for each Python
+# version, because it is compiled against a specific numpy ABI:
+#
+#     numpy<2.0 ; python_version < "3.9"
+#     numpy>=2  ; python_version >= "3.9"
+#
+# So any numpy pin we write here is either redundant or contradicts it. Pinning
+# numpy==2.2.6 broke Ubuntu 20.04 (Python 3.8, where numpy 2 will not install).
+# Pinning numpy==1.24.4 to fix that then broke every Python 3.9+ laptop, because
+# opencv REQUIRES numpy>=2 there -- pip gives up with ResolutionImpossible. Both
+# pins were correct on the machine they were written on and wrong on the others.
+#
+# Letting opencv choose gets it right on both, with no version test of our own.
+#
+# opencv itself IS pinned, and pinned to 4.x on purpose: the Limelight runs
+# OpenCV 4, so validating against 5 would be proving the wrong thing. This version
+# ships cp37 wheels, which covers Python 3.7 through 3.13.
 opencv-python-headless==4.14.0.94
