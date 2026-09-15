@@ -10,9 +10,20 @@ morphology are right, not that the HSV bounds are.
 import cv2
 import numpy as np
 
-# Fractions of ball DIAMETER. Roughly a goBILDA-style lattice ball.
-HOLE_DIAMETER_FRAC = 0.13
-HOLE_SPACING_FRAC  = 0.22
+# Fractions of ball DIAMETER, from real POLLEN measured 2026-09-15.
+#
+# Diameter comes from calipers on several balls: 0.430 in. holes on a 2.855 in.
+# ball. Spacing is an estimate -- measured off photos and cross-checked against
+# the hole count for a sphere -- so treat it as approximate in a way the hole
+# diameter is not.
+#
+# The old guesses were 0.13 and 0.22, which made the webbing between holes about
+# 0.09 of a diameter. Real POLLEN has webbing nearer 0.15, so the real ball holds
+# together better under a morphological close than the synthetic one did. The old
+# tests were harder than reality, not easier -- which is the safe direction to
+# have been wrong in.
+HOLE_DIAMETER_FRAC = 0.1506
+HOLE_SPACING_FRAC  = 0.30
 
 BACKGROUND_BGR = (72, 68, 64)     # dark gray field tile
 

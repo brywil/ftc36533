@@ -95,29 +95,41 @@ def why_nothing(image, mod):
 
 
 def marginal_colour(image, ll, mod):
-    """Warn when the detected ball's colour is close to the edge of the gate.
+    """Warn when the colour gate is CLIPPING the ball rather than containing it.
 
-    Returns a message, or None if all is well. Close to the edge means you are
-    probably only seeing part of the ball, and the distance will be wrong.
+    Sample only the pixels that actually passed the colour gate inside the
+    detection -- not the whole circle, which also contains fingers and background
+    and would make this cry wolf on every picture.
+
+    If the ball's colour genuinely fits inside the gate, the hues pile up somewhere
+    in the middle. If the gate is cutting the ball in half, they pile up hard
+    against the edge, and only the surviving sliver gets measured -- which reads as
+    a ball that is much further away than it is.
     """
     cx, cy, r = int(ll[4]), int(ll[5]), int(ll[6])
-    if r < 1:
+    if r < 3:
         return None
-    mask = np.zeros(image.shape[:2], np.uint8)
-    cv2.circle(mask, (cx, cy), r, 255, -1)
+    circle = np.zeros(image.shape[:2], np.uint8)
+    cv2.circle(circle, (cx, cy), r, 255, -1)
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    hues = hsv[..., 0][(mask > 0) & (hsv[..., 1] >= mod.HSV_LOW[1])]
-    if hues.size == 0:
+    passed = cv2.inRange(hsv, mod.HSV_LOW, mod.HSV_HIGH)
+    hues = hsv[..., 0][(circle > 0) & (passed > 0)]
+    if hues.size < 50:
         return None
-    lo, hi = int(np.percentile(hues, 5)), int(np.percentile(hues, 95))
+
     gate_lo, gate_hi = int(mod.HSV_LOW[0]), int(mod.HSV_HIGH[0])
-    if hi >= gate_hi - 2:
-        return ("ball colour reaches hue %d and your gate stops at %d -- you may be "
-                "seeing only part of the ball, so the distance will read too far. "
-                "Try --hsv-high %d" % (hi, gate_hi, hi + 4))
-    if lo <= gate_lo + 2:
-        return ("ball colour reaches hue %d and your gate starts at %d -- try "
-                "--hsv-low %d" % (lo, gate_lo, max(0, lo - 4)))
+    at_top = float((hues >= gate_hi - 1).mean())
+    at_bot = float((hues <= gate_lo + 1).mean())
+
+    if at_top > 0.15:
+        return ("%.0f%% of the ball's colour is jammed against the TOP of your hue "
+                "range (%d). The gate is probably cutting the ball, so the distance "
+                "will read too far. Try --hsv-high %d"
+                % (100 * at_top, gate_hi, gate_hi + 5))
+    if at_bot > 0.15:
+        return ("%.0f%% of the ball's colour is jammed against the BOTTOM of your hue "
+                "range (%d). Try --hsv-low %d"
+                % (100 * at_bot, gate_lo, max(0, gate_lo - 5)))
     return None
 
 

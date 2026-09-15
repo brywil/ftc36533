@@ -22,11 +22,29 @@ import numpy as np
 import math
 
 # ---------------------------------------------------------------- tuning
-HSV_LOW  = np.array([20,  90,  80], dtype=np.uint8)   # yellow: H 20-35 in OpenCV's 0-179 scale
-HSV_HIGH = np.array([35, 255, 255], dtype=np.uint8)
+# Measured from photographs of real POLLEN, 2026-09-15, under warm indoor light.
+# The ball's own surface runs hue 18-31, saturation 128-217, value 168-247.
+#
+# SATURATION IS DOING THE WORK HERE, NOT HUE. In that room the cream curtain and
+# the wall came out at median hue 22 -- the SAME hue as the ball -- so hue cannot
+# separate ball from background at all. What separates them is that the ball is
+# vividly coloured and the wall is not: raising the saturation floor from 90 to
+# 110 removed two thirds of the background while keeping every ball.
+#
+# Hue is therefore set wide, only to survive a change of lighting, and is not
+# expected to reject anything.
+HSV_LOW  = np.array([15, 110,  80], dtype=np.uint8)
+HSV_HIGH = np.array([38, 255, 255], dtype=np.uint8)
 
+# CLOSE_K was 9, chosen against synthetic balls whose webbing was too narrow. Real
+# POLLEN measures 0.430 in. holes on a 2.855 in. ball, which leaves much more
+# plastic between the holes than modelled, so the lattice survives a gentler close.
+# Measured both ways: on synthetic frames at small apparent size, K of 3-5 gives 0%
+# radius error while 9 inflates it 4.7% and 21 by 13.7%; on real photographs, K of 9
+# invented a spurious 8 px detection that 3-7 did not. Bigger is not safer here --
+# an oversized close swells the silhouette and the radius feeds distance directly.
 SPECK_K  = 3      # kills isolated yellow noise BEFORE the close can bridge it to the ball
-CLOSE_K  = 9      # >= waffle hole width in px at your farthest working range
+CLOSE_K  = 5      # see the note below -- measured, not guessed
 CLOSE_IT = 1      # a second iteration doubles the bridging reach; measured worse
 OPEN_K   = 5      # final cleanup of anything the close welded together
 
@@ -46,7 +64,9 @@ HOUGH_MIN_FILL   = 0.55    # of the proposed disk must actually be yellow
 # ResisDent(TM) polyethylene balls in yellow". NECTAR is the other element --
 # approximately 3.6 in. (9.1 cm), red or blue -- so the hue gate above rejects it
 # without any extra work. Distance scales linearly off this number.
-BALL_DIAMETER_M = 0.071
+# 2.855 in. measured with calipers across several balls, against the 2.8 in. the
+# manual quotes. Moulding tolerance is real and this feeds distance linearly.
+BALL_DIAMETER_M = 0.0725
 HFOV_DEG        = 82.0     # LL3A stock lens
 
 # Focal length in px, derived from frame width. Keyed on the width so that changing
