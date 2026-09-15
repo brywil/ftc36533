@@ -14,7 +14,7 @@ The two BIOBUZZ scoring elements, from the Section 16 glossary:
 | path | runs on |
 |---|---|
 | `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/` | the Control Hub — OpModes and subsystems |
-| `snapscript/yellow_waffle_ball.py` | the **camera** — paste into the Python tab of a Limelight pipeline |
+| `snapscript/ball_detector.py` | the **camera** — paste into the Python tab of a Limelight pipeline |
 | `tools/` | your laptop — offline vision harness, no camera needed |
 | `install.sh`, `build.sh` | your laptop — toolchain bootstrap and APK build |
 | `GETTING_STARTED.md` | **start here if you are new** — plain-language setup and driving guide |
@@ -126,21 +126,60 @@ The pipeline publishes 8 doubles, read on the robot by `LimelightBallTracker`:
 
 | index | value |
 |---|---|
-| 0 | **source**: 0 nothing, 1 contour path, 2 Hough fallback |
+| 0 | **what and how**, packed as `class * 10 + source` (see below) |
 | 1 | `tx` degrees, + is right of crosshair |
 | 2 | `ty` degrees, + is above crosshair |
 | 3 | distance in meters, from apparent ball diameter |
 | 4, 5 | center `cx`, `cy` in px |
 | 6 | radius in px |
-| 7 | confidence 0..1 — circularity on the contour path, disk fill on the Hough path |
+| 7 | shape score 0..1 — solidity × roundness |
 
-Index 0 is a **source code, not a boolean**. Source 2 means the ball was fused into a
-same-hue blob (a bumper, a wall, another ball) and a Hough pass recovered the circle
-from inside it — a real detection on a degraded path. `LimelightBallTracker` gates it
-looser (0.55 vs 0.75), flags it via `isFused()`, and you should trust its range less.
+| index 0 | meaning |
+|---|---|
+| 0 | nothing found |
+| 11 / 12 | POLLEN, by contour / by Hough recovery |
+| 21 / 22 | NECTAR red |
+| 31 / 32 | NECTAR blue |
 
-Index 7 measures two different things depending on the path, which is why it gets two
-different gates rather than one.
+Any non-zero value means something was found, so the usual robot check is just
+"is index 0 not zero". The robot can also write `llrobot[0]` to ask for one kind of
+ball only — worth doing, since searching one colour is about three times cheaper
+than searching three and the Limelight's processor is not fast.
+
+### What separates a ball from the background
+
+Two findings from photographing real balls, both of which overturned the obvious guess.
+
+**Saturation does the work, not hue.** Under warm indoor light the cream curtain and
+the wall measured median hue 22 — the *same hue as a POLLEN ball*. Hue cannot separate
+them at all. What separates them is that a ball is vividly coloured and a wall is not:
+raising the saturation floor from 90 to 110 removed two thirds of the background and
+cost no detections. The hue ranges are set wide only to survive a change of lighting.
+
+**Shape separates a red ball from a red shirt.** They are the same hue *and* the same
+saturation, so no colour gate can help. Measured: the shirt scores solidity 0.72 and
+roundness 0.71 — it squeaks past both floors individually, because a torso cropped by
+the frame is passably round and passably solid. A real ball is strongly one or the
+other (the red ball measured 0.96 × 0.79). So the gate is their **product**,
+`MIN_SHAPE = 0.62`: "good at both" is a ball, "mediocre at both" is a person.
+
+Two settings are per-class for the same reason, and the reason is clutter, not the ball:
+
+- **`MIN_AREA_BY_CLASS`** — yellow has almost nothing competing with it indoors, so
+  POLLEN keeps a low floor and keeps its range. Red has a shirt, which sheds small
+  round fragments that pass every shape test; one was reported as a ball 1.95 m away.
+  Red pays for its noise with range.
+- **`HOUGH_BY_CLASS`** — the Hough recovery genuinely rescued two *blue* balls fused
+  together, which is what it was built for. On red it fabricated balls in three photos
+  that contained no red ball at all, including a photo of two yellow ones. From a
+  colour mask alone there is no way to distinguish "a ball fused to something" from
+  "an arbitrary circle carved out of a big region", so it is allowed where clutter is
+  scarce and refused where it is not.
+
+**Known limitation:** a red ball touching a large red object cannot be recovered. In
+our test photo the ball merged with the shirt and roundness fell to 0.48. That test was
+deliberately harder than a real field, where a NECTAR ball is unlikely to be resting
+against something big and red.
 
 ### Tuning — three things that decide whether this works on a field
 

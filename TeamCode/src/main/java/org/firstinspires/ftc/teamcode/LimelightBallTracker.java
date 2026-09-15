@@ -5,7 +5,7 @@ import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 
 /**
- * FTC-side read of the SnapScript in snapscript/yellow_waffle_ball.py.
+ * FTC-side read of the SnapScript in snapscript/ball_detector.py.
  *
  * Add the camera to the Robot Configuration as an Ethernet Device -> Limelight3A
  * named "limelight". The pipeline's llpython array arrives as
@@ -16,7 +16,13 @@ import com.qualcomm.robotcore.hardware.HardwareMap;
  *
  * The array layout, set by the pipeline:
  *
- *   [0] source      0 none, 1 contour path, 2 Hough fallback
+ *   [0] what and how, packed as class * 10 + source:
+ *         0  nothing found
+ *        11  POLLEN by contour        12  POLLEN by Hough recovery
+ *        21  NECTAR red by contour    22  NECTAR red by Hough
+ *        31  NECTAR blue by contour   32  NECTAR blue by Hough
+ *       Any non-zero value means something was found, so the simple check is
+ *       just "is index 0 not zero".
  *   [1] tx deg      [2] ty deg      [3] distance m
  *   [4] cx px       [5] cy px       [6] radius px
  *   [7] confidence  0..1 -- circularity on the contour path, disk fill on the
@@ -31,6 +37,29 @@ public class LimelightBallTracker {
     public static final int SOURCE_NONE    = 0;
     public static final int SOURCE_CONTOUR = 1;
     public static final int SOURCE_HOUGH   = 2;
+
+    /** What kind of ball the camera is looking at. */
+    public enum Ball {
+        POLLEN(1), NECTAR_RED(2), NECTAR_BLUE(3);
+
+        public final int id;
+        Ball(int id) { this.id = id; }
+
+        static Ball fromId(int id) {
+            for (Ball b : values()) if (b.id == id) return b;
+            return null;
+        }
+    }
+
+    /**
+     * Ask the camera to hunt one kind of ball. This is worth doing: searching one
+     * colour is about three times cheaper than searching all three, and the
+     * Limelight's processor is not fast. Pass null to hunt everything.
+     */
+    public void setWanted(Ball ball) {
+        limelight.updatePythonInputs(new double[] { ball == null ? 0 : ball.id,
+                                                    0, 0, 0, 0, 0, 0, 0 });
+    }
 
     /** Reject a result older than this; a stale frame aims at where the ball WAS. */
     private static final long MAX_STALENESS_MS = 200;
@@ -57,9 +86,12 @@ public class LimelightBallTracker {
     public static class Target {
         public final double tx, ty, distanceMeters, radiusPx, confidence;
         public final int source;
+        /** Which of the three balls this is. */
+        public final Ball ball;
 
-        Target(double tx, double ty, double distanceMeters,
+        Target(Ball ball, double tx, double ty, double distanceMeters,
                double radiusPx, double confidence, int source) {
+            this.ball = ball;
             this.tx = tx;
             this.ty = ty;
             this.distanceMeters = distanceMeters;
@@ -81,8 +113,11 @@ public class LimelightBallTracker {
         double[] py = result.getPythonOutput();
         if (py == null || py.length < 8) return null;
 
-        int source = (int) Math.round(py[0]);
-        if (source == SOURCE_NONE) return null;
+        int packed = (int) Math.round(py[0]);
+        if (packed == SOURCE_NONE) return null;
+        Ball ball = Ball.fromId(packed / 10);
+        int source = packed % 10;
+        if (ball == null) return null;   // pipeline newer than this file; do not guess
 
         double minConf;
         if (source == SOURCE_CONTOUR) {
@@ -94,6 +129,6 @@ public class LimelightBallTracker {
         }
         if (py[7] < minConf) return null;
 
-        return new Target(py[1], py[2], py[3], py[6], py[7], source);
+        return new Target(ball, py[1], py[2], py[3], py[6], py[7], source);
     }
 }

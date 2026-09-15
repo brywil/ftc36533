@@ -23,15 +23,15 @@ import synth_waffle
 
 def load_pipeline():
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        "..", "snapscript", "yellow_waffle_ball.py")
-    spec = importlib.util.spec_from_file_location("yellow_waffle_ball", path)
+                        "..", "snapscript", "ball_detector.py")
+    spec = importlib.util.spec_from_file_location("ball_detector", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
 def run(mod, frame):
-    contour, image, llpython = mod.runPipeline(frame.copy(), [])
+    contour, image, llpython = mod.runPipeline(frame.copy(), [mod.CLASS_POLLEN])
     return llpython, image
 
 
@@ -45,11 +45,12 @@ def main():
     mod = load_pipeline()
     W, H = 640, 480
     f = (W / 2.0) / np.tan(np.radians(mod.HFOV_DEG) / 2.0)
+    pollen_m = [e for e in mod.BALL_CLASSES if e[0] == mod.CLASS_POLLEN][0][3]
     failures = []
 
     # ---- 1 + 2. size sweep, center and radius accuracy -------------------
     print("=" * 74)
-    print("SIZE SWEEP  (640x480, focal %.1f px, ball %.4f m)" % (f, mod.BALL_DIAMETER_M))
+    print("SIZE SWEEP  (640x480, focal %.1f px, POLLEN %.4f m)" % (f, pollen_m))
     print("%6s %9s %7s %9s %9s %7s %9s" %
           ("r_true", "range_m", "found", "ctr_err", "r_err_%", "circ", "dist_err"))
     print("-" * 74)
@@ -57,7 +58,7 @@ def main():
         cx, cy = 300.0, 210.0
         frame, _ = synth_waffle.make_frame(W, H, cx, cy, r, seed=r)
         ll, ann = run(mod, frame)
-        true_range = mod.BALL_DIAMETER_M * f / (2.0 * r)
+        true_range = pollen_m * f / (2.0 * r)
         if not ll[0]:
             print("%6d %9.2f %7s %9s %9s %7s %9s" % (r, true_range, "MISS", "-", "-", "-", "-"))
             failures.append("miss at r=%d (range %.2f m)" % (r, true_range))

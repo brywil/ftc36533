@@ -192,7 +192,7 @@ while it's pointing away from you. That re-zeroes it.
 Two separate things, don't mix them up:
 
 **Finding POLLEN** runs *inside the Limelight camera*. The file is
-`snapscript/yellow_waffle_ball.py`. You paste it into the Limelight's web page, in the
+`snapscript/ball_detector.py`. You paste it into the Limelight's web page, in the
 Python tab. The robot then asks the camera "do you see a ball, and where?"
 
 **Finding the HIVE** runs *on the Control Hub* using a regular webcam. Run
@@ -294,7 +294,7 @@ we changed CLOSE_K to 3" gets fixed in a minute.
 
 ## Numbers you can change (and ones to leave alone)
 
-**Safe to experiment with**, in `snapscript/yellow_waffle_ball.py`:
+**Safe to experiment with**, in `snapscript/ball_detector.py`:
 
 - `HSV_LOW` / `HSV_HIGH` — which colours count as "yellow". Widen these if the camera
   misses balls in dim light.
