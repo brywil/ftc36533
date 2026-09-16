@@ -51,7 +51,26 @@ The detector is one file in this repo:
 snapscript/ball_detector.py
 ```
 
-Open it in a text editor and copy **the whole thing**.
+**Paste the COMPACT build, not this one:**
+
+```
+snapscript/ball_detector.deploy.py
+```
+
+The readable file is 16.4 KB and **the Limelight silently refuses anything over
+about 16 KB**. The editor does not tell you — it prints "Saving..." and throws the
+script away, leaving the camera running whatever it had before. That is a nasty
+one: it looks like it worked.
+
+The compact build is the same code with the comments stripped (6.4 KB), and it is
+verified to behave identically — same detections, same distances, on all 18 test
+photos. Regenerate it any time you change the detector:
+
+```bash
+cd tools && ../.venv/bin/python make_deployable.py
+```
+
+Open that file and copy **the whole thing**.
 
 In the web page, find the pipeline settings and switch the pipeline **type** to
 **Python** (Limelight calls these "SnapScript" pipelines). That reveals a code editor.
@@ -62,9 +81,18 @@ Delete the example code that's in there and paste ours in.
 > type selector and a Python tab. If the layout doesn't match, poke around — you
 > can't break anything, and changing pipelines is reversible.
 
-**Changes apply instantly** — there is no deploy button. If your Python has a mistake,
-the error is printed right on the web page, which is the fastest debugging loop you
-will ever get.
+Save with **Ctrl+S** — click inside the code area first, or the browser may swallow
+it. There is no save button. Errors print on the page.
+
+> **Do not put spaces in a pipeline name.** The Limelight's own web protocol is
+> space-delimited, so a name like `BIOBUZZ ball detector` truncates the message the
+> UI receives, `JSON.parse` throws, and **the entire interface greys out** until
+> something rewrites the name. Use underscores: `BIOBUZZ_ball_detector`. We hit this
+> and it looks exactly like a broken camera.
+
+> **The editor needs the internet.** It loads Monaco from `cdn.jsdelivr.net`, so at a
+> venue with no wifi you cannot edit Python on the Limelight at all. Whatever is on
+> the camera when you leave home is what you compete with. Test before you go.
 
 ---
 
