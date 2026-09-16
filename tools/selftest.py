@@ -44,13 +44,15 @@ def main():
 
     mod = load_pipeline()
     W, H = 640, 480
-    f = (W / 2.0) / np.tan(np.radians(mod.HFOV_DEG) / 2.0)
+    # Ask the pipeline for its own intrinsics rather than recomputing them here --
+    # two copies of this maths is how they drift apart.
+    f, _fy, _cx, _cy = mod._intrinsics(W, H)
     pollen_m = [e for e in mod.BALL_CLASSES if e[0] == mod.CLASS_POLLEN][0][3]
     failures = []
 
     # ---- 1 + 2. size sweep, center and radius accuracy -------------------
     print("=" * 74)
-    print("SIZE SWEEP  (640x480, focal %.1f px, POLLEN %.4f m)" % (f, pollen_m))
+    print("SIZE SWEEP  (%dx%d, focal %.1f px, POLLEN %.4f m)" % (W, H, f, pollen_m))
     print("%6s %9s %7s %9s %9s %7s %9s" %
           ("r_true", "range_m", "found", "ctr_err", "r_err_%", "circ", "dist_err"))
     print("-" * 74)

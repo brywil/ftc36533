@@ -130,17 +130,60 @@ HOUGH_FALLBACK   = True    # master switch; per-class table above still applies
 HOUGH_MIN_BLOB   = 4000    # px^2 of rejected blob before it is worth the attempt
 HOUGH_MIN_FILL   = 0.55    # of the proposed disk must be the right colour
 
-HFOV_DEG = 82.0    # LL3A stock lens
+# ---------------------------------------------------- camera calibration
+#
+# These are THIS camera's real measured optics, read straight off it:
+#
+#     curl http://limelight.local:5807/hwreport
+#
+# Every Limelight is calibrated at the factory and will tell you its own numbers,
+# which beats any spec sheet. If you ever swap cameras, re-run that command and
+# paste the new values in -- do not assume one camera matches another.
+#
+# Two things here are better than the usual "work it out from the field of view":
+#
+#  * The focal length is MEASURED, not derived. Deriving it from the 54.5 degree
+#    field of view gives 621 px where the real answer is 611 -- a 1.7% distance
+#    error, free to avoid.
+#  * The principal point is where the lens actually points, which is NOT the middle
+#    of the picture. On this camera it sits 22.5 px above centre vertically. Assume
+#    the middle and every ty reading is biased by about 1 degree, permanently and
+#    invisibly.
+#
+# Calibrated at 1280x960; scaled below to whatever resolution the pipeline runs at.
+CALIB_RES_X   = 1280.0
+CALIB_FOCAL_X = 1221.445
+CALIB_FOCAL_Y = 1223.398
+CALIB_CX      = 637.226
+CALIB_CY      = 502.549
 
-# Focal length in px, derived from frame width. Keyed on the width so that changing
-# the pipeline's capture resolution cannot leave a stale value cached.
-_focal_cache = {}
+# Set this to a number ONLY when running on some other camera -- a webcam, a phone --
+# where the calibration above does not apply. Then focal length is derived from the
+# field of view and the lens is assumed to point at the middle of the picture.
+# check_photos.py sets it via --hfov. Leave it None on the Limelight.
+HFOV_OVERRIDE_DEG = None
+
+_intrinsics_cache = {}
 
 
-def _focal(width):
-    if width not in _focal_cache:
-        _focal_cache[width] = (width / 2.0) / math.tan(math.radians(HFOV_DEG) / 2.0)
-    return _focal_cache[width]
+def _intrinsics(width, height):
+    """(focal_x, focal_y, centre_x, centre_y) in pixels, for this frame size.
+
+    Cached on the frame size, so changing the pipeline's capture resolution cannot
+    leave a stale value behind.
+    """
+    key = (width, height, HFOV_OVERRIDE_DEG)
+    if key not in _intrinsics_cache:
+        if HFOV_OVERRIDE_DEG is not None:
+            f = (width / 2.0) / math.tan(math.radians(HFOV_OVERRIDE_DEG) / 2.0)
+            _intrinsics_cache[key] = (f, f, width / 2.0, height / 2.0)
+        else:
+            # Focal length and principal point both scale with resolution, since
+            # they are pixel counts describing the same physical lens.
+            scale = width / CALIB_RES_X
+            _intrinsics_cache[key] = (CALIB_FOCAL_X * scale, CALIB_FOCAL_Y * scale,
+                                      CALIB_CX * scale, CALIB_CY * scale)
+    return _intrinsics_cache[key]
 
 
 def _build_mask(hsv, ranges):
@@ -254,7 +297,11 @@ def runPipeline(image, llrobot):
     """
     llpython = [0, 0, 0, 0, 0, 0, 0, 0]
     h, w = image.shape[:2]
-    f = _focal(w)
+    focal_x, focal_y, centre_x, centre_y = _intrinsics(w, h)
+    # The ball's apparent radius is measured the same way in both axes, so distance
+    # uses the mean. On this lens fx and fy differ by 0.16%, well under the noise in
+    # the radius itself.
+    focal_mean = 0.5 * (focal_x + focal_y)
 
     wanted = 0
     try:
@@ -279,7 +326,7 @@ def runPipeline(image, llrobot):
         if cand is None:
             continue
         cx, cy, r, score, contour, source = cand
-        dist = (diameter_m * f) / (2.0 * r)
+        dist = (diameter_m * focal_mean) / (2.0 * r)
         if winner is None or dist < winner[0]:
             winner = (dist, class_id, class_name, cx, cy, r, score, contour, source)
 
@@ -288,8 +335,11 @@ def runPipeline(image, llrobot):
 
     dist, class_id, class_name, cx, cy, r, score, contour, source = winner
 
-    tx = math.degrees(math.atan2(cx - w / 2.0, f))
-    ty = math.degrees(math.atan2(h / 2.0 - cy, f))
+    # Angles are measured from where the lens actually points (the principal
+    # point), not from the middle of the picture. Those are not the same place --
+    # see the calibration block at the top.
+    tx = math.degrees(math.atan2(cx - centre_x, focal_x))
+    ty = math.degrees(math.atan2(centre_y - cy, focal_y))
 
     colour = (0, 255, 0) if source == 1 else (0, 200, 255)
     cv2.circle(image, (int(cx), int(cy)), int(r), colour, 2)

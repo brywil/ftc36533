@@ -136,7 +136,10 @@ def main():
     ap.add_argument("--hsv-high", type=int, help="highest hue to accept")
     ap.add_argument("--min-sat", type=int, help="minimum colour strength")
     ap.add_argument("--ball-in", type=float, help="real ball diameter in INCHES")
-    ap.add_argument("--hfov", type=float, help="camera field of view, degrees")
+    ap.add_argument("--hfov", type=float,
+                    help="field of view in degrees, for photos NOT taken with the "
+                         "Limelight (a webcam or phone). Without it the Limelight's "
+                         "own factory calibration is used.")
     args = ap.parse_args()
 
     mod = load_pipeline()
@@ -165,8 +168,11 @@ def main():
     mod.BALL_CLASSES = rebuilt
 
     if args.hfov is not None:
-        mod.HFOV_DEG = args.hfov
-        mod._focal_cache.clear()
+        # Photos from a webcam or phone were not taken through the Limelight's lens,
+        # so its factory calibration does not apply. This switches the pipeline to
+        # working the focal length out from a field of view instead.
+        mod.HFOV_OVERRIDE_DEG = args.hfov
+        mod._intrinsics_cache.clear()
 
     if os.path.isdir(args.path):
         files = []
