@@ -81,8 +81,17 @@ Delete the example code that's in there and paste ours in.
 > type selector and a Python tab. If the layout doesn't match, poke around — you
 > can't break anything, and changing pipelines is reversible.
 
-Save with **Ctrl+S** — click inside the code area first, or the browser may swallow
-it. There is no save button. Errors print on the page.
+**PAUSE THE EDITOR FIRST (the ⏸ button), or your paste will vanish.** The camera
+broadcasts its stored script on a timer, and the editor overwrites *both* what you
+see and what it is about to upload every time that arrives. Paste without pausing
+and the sequence is: your code appears, the camera pushes its old script over it,
+you hit save, and it uploads the old script back. The UI says "Saving..." the whole
+time and it is telling the truth — it is just saving the wrong thing. This cost us
+an hour.
+
+So: **pause, then paste, then click the disk/save icon.** Prefer the button over
+Ctrl+S — a page-level handler grabs Ctrl+S first and only fires the real save if the
+keystroke reaches the editor itself. Errors print on the page.
 
 > **Do not put spaces in a pipeline name.** The Limelight's own web protocol is
 > space-delimited, so a name like `BIOBUZZ ball detector` truncates the message the
@@ -90,9 +99,8 @@ it. There is no save button. Errors print on the page.
 > something rewrites the name. Use underscores: `BIOBUZZ_ball_detector`. We hit this
 > and it looks exactly like a broken camera.
 
-> **The editor needs the internet.** It loads Monaco from `cdn.jsdelivr.net`, so at a
-> venue with no wifi you cannot edit Python on the Limelight at all. Whatever is on
-> the camera when you leave home is what you compete with. Test before you go.
+> **The editor works offline.** It serves its own copy of the code editor from the
+> camera at `/vs`, so no internet is needed at a venue.
 
 ---
 
@@ -118,6 +126,41 @@ Then try:
 
 **Red outlines are not errors.** They mean the detector looked at something and
 decided it wasn't a ball. That is the system working.
+
+---
+
+## 4b. Exposure and gain — do this in the room you'll compete in
+
+The camera does **not** adapt to lighting. Get this wrong and nothing is detected,
+or everything is.
+
+```bash
+cd tools && ../.venv/bin/python tune_camera.py          # measure and report
+cd tools && ../.venv/bin/python tune_camera.py --apply  # and set the winner
+```
+
+It sets each combination, grabs a real frame, measures it, and reports what actually
+works. Two settings, with very different costs:
+
+| | brighter, but |
+|---|---|
+| **exposure** | directly caps frame rate, and smears a moving ball into a streak |
+| **gain** | free frame-rate-wise, but amplifies noise — and noise makes fake balls |
+
+**Rule: lowest exposure that's bright enough, make up the rest with gain.**
+
+Measured in a dim living room, gain already maxed at 80:
+
+| exposure | brightness | fps |
+|---|---|---|
+| 100 | 2 | 41 |
+| 400 | 34 | 18.5 |
+| 700 | **65** | 18.8 |
+| 1000 | 79 | **3** |
+
+There was **no** setting that was both bright enough and fast enough. That is not a
+tuning failure — it means the room did not have enough light, and the fix is a lamp,
+not a number. If `tune_camera.py` says nothing worked, believe it.
 
 ---
 
