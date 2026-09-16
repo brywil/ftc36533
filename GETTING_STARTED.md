@@ -103,6 +103,9 @@ letters and underscores matter:
 | Front right motor | `front_right` |
 | Back left motor | `back_left` |
 | Back right motor | `back_right` |
+| Intake motor | `intake` |
+| Left lift motor | `lift_left` |
+| Right lift motor | `lift_right` |
 | The Control Hub's built-in IMU | `imu` |
 | The camera (if you have one plugged in) | `Webcam 1` |
 
@@ -179,6 +182,14 @@ rollers on the four wheels should form an X when you look down at the robot.
 | Right trigger | Slow down for lining up precisely. Squeeze harder, go slower. |
 | `options` button | Sets "forward" to whichever way the robot is pointing right now |
 | `back` button | Switches between field-centric and robot-centric |
+| Right bumper | Run the intake. Hold it down; let go to stop. |
+| Left bumper | Run the intake backwards, to clear a jam |
+| D-pad up / down | Raise / lower the lift. Hold it down; let go to stop. |
+
+The intake and lift motors are listed in `0. Hardware Check` too, so you can spin
+each one on its own and see which way it turns. If the two lift motors fight each
+other, tell a mentor — it's a one-line fix in `AttachmentMotors.java`. As always:
+**wheels off the ground, and keep fingers clear of the lift, while testing.**
 
 Start in **field-centric**. Point the robot away from you, press `options`, then
 drive. Pushing the stick away from you moves the robot away from you, even after it

@@ -12,6 +12,9 @@ import com.qualcomm.robotcore.hardware.DcMotor;
  *   right trigger   precision creep -- scales everything down for lining up
  *   options         re-zero the field-centric heading to wherever the robot points
  *   back            toggle field-centric / robot-centric
+ *   right bumper    run the intake (hold to run; let go to stop)
+ *   left bumper     reverse the intake -- clears a jam
+ *   dpad up/down    raise / lower the lift (hold to run; let go to stop)
  *
  * FIRST BRINGUP, in this order, on blocks with the wheels off the ground:
  *
@@ -37,9 +40,16 @@ public class MecanumTeleOp extends LinearOpMode {
     /** Multiplier at full precision trigger. */
     private static final double CREEP_SCALE = 0.30;
 
+    /** Intake power. Right bumper runs it at this; left bumper runs it reversed. */
+    private static final double INTAKE_POWER = 1.0;
+
+    /** Lift power while a dpad direction is held. Kept below 1 for a first test. */
+    private static final double LIFT_POWER = 0.6;
+
     @Override
     public void runOpMode() {
         MecanumDrivebase drive = new MecanumDrivebase(hardwareMap);
+        AttachmentMotors attachments = new AttachmentMotors(hardwareMap);
 
         boolean fieldCentric = true;
         boolean backWasPressed = false;
@@ -85,14 +95,30 @@ public class MecanumTeleOp extends LinearOpMode {
                 drive.driveRobotCentric(forward, strafe, turn);
             }
 
+            // Attachments. Both are hold-to-run, so nothing keeps spinning after a
+            // mechanism jams or a ball is where it should be -- the safe failure is
+            // always "let go". Reverse on the left bumper clears a jam in the intake.
+            double intakePower = 0.0;
+            if (gamepad1.right_bumper) intakePower = INTAKE_POWER;
+            else if (gamepad1.left_bumper) intakePower = -INTAKE_POWER;
+            attachments.setIntake(intakePower);
+
+            double liftPower = 0.0;
+            if (gamepad1.dpad_up) liftPower = LIFT_POWER;
+            else if (gamepad1.dpad_down) liftPower = -LIFT_POWER;
+            attachments.setLift(liftPower);
+
             telemetry.addData("mode", fieldCentric ? "FIELD-centric" : "ROBOT-centric");
             telemetry.addData("heading", "%.1f deg", Math.toDegrees(drive.getHeading()));
             telemetry.addData("stick", "fwd %+.2f  str %+.2f  turn %+.2f",
                     forward, strafe, turn);
+            telemetry.addData("intake", "%+.2f  (RB in, LB reverse)", intakePower);
+            telemetry.addData("lift", "%+.2f  (dpad up/down)", liftPower);
             telemetry.update();
         }
 
         drive.stop();
+        attachments.stop();
     }
 
     private static double deadband(double value) {

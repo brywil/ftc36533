@@ -73,6 +73,7 @@ Robot Configuration names expected on the Control Hub:
 
 ```
 front_left   front_right   back_left   back_right      DcMotor
+intake     lift_left     lift_right                    DcMotor
 imu                                                    built into the Control Hub
 limelight                                              Ethernet Device -> Limelight3A
 ```
@@ -87,6 +88,23 @@ taped square.
 `MecanumTeleOp` is a working OpMode: left stick translates, right stick x turns, right
 trigger is a precision creep, `options` re-zeros the field-centric heading, `back`
 toggles field- vs robot-centric.
+
+### Attachments
+
+`AttachmentMotors` owns one intake and two lift motors (names `intake`, `lift_left`,
+`lift_right`). They are simple open-loop spin motors — no encoders, no holding a
+position. Each is looked up with `tryGet`, so a missing name does not stop the
+drivebase working; `HardwareCheck` is where a wrong name shows up.
+
+| control | does |
+|---|---|
+| right bumper | run the intake, hold to run |
+| left bumper | run the intake reversed — clears a jam |
+| dpad up / down | raise / lower the lift, hold to run |
+
+Both are **hold-to-run**, so the safe failure is always "let go". A lift motor that
+fights its twin is a reversed motor: flip `LIFT_LEFT_REVERSE` / `LIFT_RIGHT_REVERSE`
+in `AttachmentMotors.java`. Test on blocks before the lift can hit anything.
 
 ### Bring it up on blocks, in this order
 

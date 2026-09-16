@@ -34,10 +34,21 @@ public class HardwareCheck extends LinearOpMode {
             {"right (2wd)", "right_drive", "right"},
     };
 
+    /** Attachment motors, checked and spun the same way. Listed after the wheels. */
+    private static final String[][] ATTACHMENTS = {
+            {"intake",     "intake"},
+            {"lift left",  "lift_left"},
+            {"lift right", "lift_right"},
+    };
+
     @Override
     public void runOpMode() {
+        // foundNames and foundMotors are kept PARALLEL: only motors that were actually
+        // found go into either one. Missing attachments are listed in missingNames
+        // instead, because a name with no motor behind it cannot be spun.
         List<String> foundNames = new ArrayList<>();
         List<DcMotor> foundMotors = new ArrayList<>();
+        List<String> missingNames = new ArrayList<>();
 
         // What does the configuration actually contain? This is the ground truth --
         // if a name is not in this list, the code can never find it, no matter how
@@ -63,6 +74,24 @@ public class HardwareCheck extends LinearOpMode {
             }
         }
 
+        // The attachment motors go into the same list, so the bumper/A spin loop
+        // below works on them with no separate code path. They are simply missing
+        // from the list when the configuration does not have them yet.
+        for (String[] row : ATTACHMENTS) {
+            DcMotor found = null;
+            String usedName = null;
+            for (int i = 1; i < row.length; i++) {
+                DcMotor m = hardwareMap.tryGet(DcMotor.class, row[i]);
+                if (m != null) { found = m; usedName = row[i]; break; }
+            }
+            if (found != null) {
+                foundNames.add(row[0] + " = \"" + usedName + "\"");
+                foundMotors.add(found);
+            } else {
+                missingNames.add(row[0] + " -- name it \"" + row[1] + "\"");
+            }
+        }
+
         IMU imu = hardwareMap.tryGet(IMU.class, "imu");
 
         telemetry.addLine("=== WHAT THE CONFIGURATION CONTAINS ===");
@@ -75,6 +104,12 @@ public class HardwareCheck extends LinearOpMode {
             telemetry.addLine("  this code looks for. Check spelling and underscores.");
         } else {
             for (String n : foundNames) telemetry.addLine("  OK  " + n);
+        }
+        if (!missingNames.isEmpty()) {
+            telemetry.addLine();
+            telemetry.addLine("=== ATTACHMENTS NOT IN THE CONFIGURATION ===");
+            for (String n : missingNames) telemetry.addLine("  MISSING  " + n);
+            telemetry.addLine("  (drivebase still works; these motors are simply skipped)");
         }
         telemetry.addLine();
         telemetry.addData("imu", imu == null ? "MISSING (field-centric will not work)" : "OK");
