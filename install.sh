@@ -294,33 +294,17 @@ detect_compile_sdk() {
 link_teamcode() {
     step "Linking this repo's OpModes into the FTC SDK"
 
-    local src="$REPO_ROOT/$TEAMCODE_PKG"
-    local dst="$FTC_SDK_DIR/$TEAMCODE_PKG"
-    run mkdir -p "$dst"
+    # The actual work lives in link-teamcode.sh so that build.sh can run the
+    # exact same logic before every gradle invocation. Duplicating it here is
+    # how the two would drift -- and a build against a stale set of links fails
+    # with an error that names the wrong file.
+    if (( DRY_RUN )); then
+        info "[dry-run] would link $REPO_ROOT/$TEAMCODE_PKG/*.java into $FTC_SDK_DIR/$TEAMCODE_PKG"
+        return 0
+    fi
 
-    # Symlinks, not copies: edit a file here and the next build picks it up, with
-    # no sync step to forget. The repo stays the single source of truth.
-    local f n linked=0
-    for f in "$src"/*.java; do
-        [[ -e "$f" ]] || continue
-        n="$(basename "$f")"
-        run ln -sfn "$f" "$dst/$n"
-        linked=$((linked + 1))
-    done
-
-    # Drop links left behind by a file this repo has since renamed or deleted;
-    # otherwise a stale symlink becomes a dangling path and the build fails on a
-    # file nobody can find in git.
-    local l target
-    for l in "$dst"/*.java; do
-        [[ -L "$l" ]] || continue
-        target="$(readlink "$l")"
-        if [[ "$target" == "$REPO_ROOT"/* && ! -e "$target" ]]; then
-            run rm -f "$l"
-        fi
-    done
-
-    ok "$linked file(s) linked into $dst"
+    FTC_SDK_DIR="$FTC_SDK_DIR" "$REPO_ROOT/link-teamcode.sh" --quiet
+    ok "linked into $FTC_SDK_DIR/$TEAMCODE_PKG"
 }
 
 write_env_file() {

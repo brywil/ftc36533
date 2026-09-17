@@ -24,6 +24,12 @@ source "$ENV_FILE"
 
 [[ -d "$FTC_SDK_DIR" ]] || { echo "error: FTC SDK not at $FTC_SDK_DIR -- re-run ./install.sh" >&2; exit 1; }
 
+# Link this repo's sources into the SDK before every gradle run. A new .java file
+# is invisible to gradle until it is linked, and the resulting failure -- some
+# other class "cannot find symbol" -- points at the wrong file. Doing this here
+# means you never have to remember to re-run ./install.sh after adding a file.
+FTC_SDK_DIR="$FTC_SDK_DIR" "$REPO_ROOT/link-teamcode.sh" --quiet
+
 cd "$FTC_SDK_DIR"
 
 case "${1:-}" in

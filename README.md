@@ -17,6 +17,7 @@ The two BIOBUZZ scoring elements, from the Section 16 glossary:
 | `snapscript/ball_detector.py` | the **camera** — paste into the Python tab of a Limelight pipeline |
 | `tools/` | your laptop — offline vision harness, no camera needed |
 | `install.sh`, `build.sh` | your laptop — toolchain bootstrap and APK build |
+| `link-teamcode.sh` | your laptop — symlinks `TeamCode/` into the SDK; run by both of the above |
 | `GETTING_STARTED.md` | **start here if you are new** — plain-language setup and driving guide |
 
 > **New to this?** Read [GETTING_STARTED.md](GETTING_STARTED.md) first. It explains
@@ -66,6 +67,14 @@ The FTC SDK is cloned into `ftc-sdk/` and is **not** tracked here — it is pinn
 in `install.sh`, so re-running gets everyone the same one. Your OpModes are symlinked
 into it, so editing a file in `TeamCode/` is picked up by the next build with no sync
 step to forget.
+
+The linking is done by `link-teamcode.sh`, which `build.sh` runs before **every** gradle
+invocation — including `./build.sh install` and passed-through tasks. That matters when
+you *add* a file: a new `.java` source is invisible to gradle until it has been linked,
+and the error it produces is a `cannot find symbol` in some *other* class, which points
+at the wrong file. Linking on every build makes that impossible to hit, whether you added
+the file, renamed it, or deleted it. You never need to re-run `install.sh` to pick up a
+source change.
 
 ## The drivebase
 
@@ -423,6 +432,11 @@ Re-run `./build.sh`. If it becomes repeatable, raise `org.gradle.jvmargs` in
 
 **`./build.sh` says `.ftc-env.sh` is missing** — run `./install.sh` first; that file is
 generated and holds machine-specific paths, so it is deliberately not tracked.
+
+**A `cannot find symbol` error for a class that clearly exists** — historically this meant
+a newly added `.java` file had not been linked into the SDK yet. `build.sh` now links
+before every gradle run, so this should no longer happen; if it does, run
+`./link-teamcode.sh` and read its output, which names what it linked.
 
 **Licenses.** If a gradle build fails with an Android package it cannot find, the SDK
 licenses were not accepted. Re-run `./install.sh`, which accepts them explicitly — the
