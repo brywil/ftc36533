@@ -69,6 +69,27 @@ step to forget.
 
 ## The drivebase
 
+### Two robots, two drivebases — pick one per robot
+
+The team runs two robots, and they have different wheels, so they need different code.
+The code for both lives here; a robot uses whichever one its hardware matches.
+
+| robot | wheels | drivebase class | OpMode to run | config names |
+|---|---|---|---|---|
+| practice bot | mecanum (can slide) | `MecanumDrivebase` | `2. Mecanum TeleOp` | `front_left` etc. + `imu` |
+| kitbot | tank / skid-steer (goBILDA StarterBot) | `TankDrivebase` | `2. Tank TeleOp (kitbot)` | `left_drive` / `right_drive` |
+
+The reason there are two pieces of code and not one setting: a mecanum base can move in
+directions it is not facing, so its math uses a **strafe** input and it can offer
+field-centric driving off the IMU. A tank base has one motor per side and can only move
+the way it points, so it has no strafe and no field-centric mode — those inputs do not
+exist on it. The two are genuinely different robots to the software, not a preference.
+
+Everything else — the intake/lift controls, the deadband, the precision-creep trigger —
+is shared, so a driver can move between the two robots without relearning the controls.
+
+### Setting up the practice bot (mecanum)
+
 Robot Configuration names expected on the Control Hub:
 
 ```
@@ -78,6 +99,8 @@ imu                                                    built into the Control Hu
 limelight                                              Ethernet Device -> Limelight3A
 ```
 
+Then run `2. Mecanum TeleOp (field-centric)`. Mecanum is the only base that uses the IMU.
+
 `MecanumDrivebase` gives you `driveRobotCentric(forward, strafe, turn)` and
 `driveFieldCentric(...)`, both taking -1..1. The inputs are normalised together by
 `max(|f| + |s| + |t|, 1)`, so a full-stick diagonal keeps its heading instead of
@@ -85,9 +108,38 @@ clipping into a curve. `STRAFE_GAIN` scales the strafe axis up because mecanum r
 make sideways travel weaker than forward travel at equal power — tune it by driving a
 taped square.
 
-`MecanumTeleOp` is a working OpMode: left stick translates, right stick x turns, right
-trigger is a precision creep, `options` re-zeros the field-centric heading, `back`
-toggles field- vs robot-centric.
+The OpMode: left stick translates, right stick x turns, right trigger is a precision
+creep, `options` re-zeros the field-centric heading, `back` toggles field- vs
+robot-centric.
+
+### Setting up the kitbot (tank)
+
+This is goBILDA's 2026-27 BIOBUZZ **StarterBot**, which is a drop-center 6WD drop
+chassis — one motor per side, no strafing. There is a separate goBILDA mecanum
+StarterBot built on the Strafer chassis; if you have that one, use the mecanum
+instructions above instead.
+
+Robot Configuration names expected on the Control Hub:
+
+```
+left_drive   right_drive                              DcMotor
+intake     lift_left     lift_right                    DcMotor
+limelight                                              Ethernet Device -> Limelight3A
+```
+
+Then run `2. Tank TeleOp (kitbot)`. **No IMU is needed or used** — leave it out of the
+configuration; the tank drivebase never looks for it.
+
+`left_drive` and `right_drive` are goBILDA's own names from their official StarterBot
+example code, so a stock kit needs no renaming. One side is reversed in
+`TankDrivebase` for "forward" to mean forward; goBILDA's kit has the right side
+reversed, which is why `RIGHT_REVERSE` is `true` there. If your robot is built the
+other way round, flip the constant rather than rewiring.
+
+`TankDrivebase` gives you `driveRobotCentric(forward, turn)` — arcade-style, normalised
+by `max(|f| + |t|, 1)` the same way mecanum is — and `driveTank(left, right)`, which
+drives each side from its own input for a classic two-stick driver. The OpMode starts
+in arcade and `back` toggles to tank steering.
 
 ### Attachments
 
@@ -108,6 +160,8 @@ in `AttachmentMotors.java`. Test on blocks before the lift can hit anything.
 
 ### Bring it up on blocks, in this order
 
+**Mecanum (practice bot):**
+
 1. Left stick forward — **all four wheels must spin forward.** A wheel going backwards
    is a reversed motor, not a math problem; fix the direction in `MecanumDrivebase`.
 2. Left stick right — the wheels must form an **X pattern** seen from above. If the
@@ -115,6 +169,15 @@ in `AttachmentMotors.java`. Test on blocks before the lift can hit anything.
 3. Only then put it on the floor. A chassis with one roller set mounted backwards
    drives fine forward and crabs sideways on every turn, which looks like a software
    bug and is not one.
+
+**Tank (kitbot):**
+
+1. Left stick forward — **both wheels must spin forward.** A side going backwards is a
+   reversed motor; flip `LEFT_REVERSE` or `RIGHT_REVERSE` in `TankDrivebase`.
+2. Left stick right — the robot must spin **clockwise** seen from above. If it turns
+   the wrong way, flip the sign of the turn.
+3. Only then put it on the floor. A tank base that drives fine but turns the wrong way
+   is a direction constant, not a wheel swap — the two sides are not interchangeable.
 
 ## The vision pipeline
 
@@ -328,12 +391,16 @@ about whether the HSV bounds are right** — those need real footage.
 
 **Toolchain and Java — built for real.** `install.sh` was run end to end and `build.sh`
 produced `TeamCode-debug.apk` (51 MB) against FTC SDK v12.0, AGP 8.13.2, Gradle 9.1.0,
-compileSdk 30. All three classes are present in the APK's dex, and the `Mecanum TeleOp`
-registration string with them, so the OpMode will list on the Driver Station. The Java
-also compiles clean against the real `RobotCore`/`Hardware` 12.0.0 jars, and every
-Limelight method it calls was checked against those jars with `javap`.
+compileSdk 30. `TankDrivebase` and `TankTeleOp` are present in the APK's dex along with
+the `Tank TeleOp (kitbot)` registration string, so the tank OpMode will list on the
+Driver Station alongside the mecanum one. The Java also compiles clean against the real
+`RobotCore`/`Hardware` 12.0.0 jars, and every Limelight method it calls was checked
+against those jars with `javap`.
 
-**Not verified:** nothing has run on a Control Hub. No robot, no camera, no field.
+**Not verified:** nothing has run on a Control Hub. No robot, no camera, no field. In
+particular the **tank drive is unexercised on hardware** — the two direction constants in
+`TankDrivebase` are reasoned from goBILDA's official StarterBot example code, not measured
+on our kitbot.
 
 **Vision — exercised against synthetic frames**, `selftest.py` passes clean: detected
 across apparent radii of 10–130 px, which at the real POLLEN diameter is 1.31 m down to

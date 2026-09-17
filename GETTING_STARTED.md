@@ -13,9 +13,13 @@ pressing things as you go.
 
 This season's game is **BIOBUZZ**. The robot has two jobs:
 
-1. **Drive around** — ours uses *mecanum* wheels, which can slide sideways.
+1. **Drive around** — we have two robots: a practice bot with *mecanum* wheels (which
+   can slide sideways) and a kitbot with *tank* drive (which cannot).
 2. **Find POLLEN** — the yellow balls. A camera looks for them and tells the robot
    where they are.
+
+Which robot you're on changes one part of the setup: the names to give the drive motors,
+and which OpMode you run. Both are explained in Part 2. Everything else is the same.
 
 The code in this folder does both. There is also some newer code for finding the
 **HIVE** (the big tipping thing in the middle of the field) so the robot can work out
@@ -36,6 +40,7 @@ You do not need to memorize these. Come back when you hit one.
 | **Control Hub** | The box on the robot that runs the code. |
 | **Robot Configuration** | A list on the Driver Station of what's plugged in where, and what each thing is *named*. |
 | **mecanum** | Wheels with rollers at an angle. Lets the robot slide sideways without turning. |
+| **tank / skid-steer** | One motor drives each side, left and right. To turn, the two sides run at different speeds. Can't slide sideways. |
 | **strafe** | Sliding sideways. |
 | **field-centric** | "Forward" means away from the driver, no matter which way the robot is pointing. |
 | **robot-centric** | "Forward" means the direction the robot's nose is pointing. |
@@ -94,8 +99,15 @@ The code looks for parts *by name*. If the code asks for `front_left` and the
 configuration says `frontLeft`, the robot won't start — it will show an error about a
 missing device instead.
 
-On the Driver Station, make a Robot Configuration with exactly these names. Capital
-letters and underscores matter:
+**First, which robot are you on?** We have two, and they need *different names*.
+
+- **Practice bot** — mecanum wheels (it can slide sideways). Use the first table.
+- **Kitbot** — tank drive (goBILDA StarterBot, one motor per side). Use the second table.
+
+If you're not sure: count the drive motors. Four motors across four wheels, with the
+rollers set at an angle, is mecanum. Two motors, one per side, is tank.
+
+**Practice bot (mecanum) — name these exactly.** Capital letters and underscores matter:
 
 | What it is | Name it exactly |
 |---|---|
@@ -108,6 +120,21 @@ letters and underscores matter:
 | Right lift motor | `lift_right` |
 | The Control Hub's built-in IMU | `imu` |
 | The camera (if you have one plugged in) | `Webcam 1` |
+
+**Kitbot (tank) — name these exactly.** Only the two drive motors differ:
+
+| What it is | Name it exactly |
+|---|---|
+| Left side motor (all left wheels) | `left_drive` |
+| Right side motor (all right wheels) | `right_drive` |
+| Intake motor | `intake` |
+| Left lift motor | `lift_left` |
+| Right lift motor | `lift_right` |
+| The camera (if you have one plugged in) | `Webcam 1` |
+
+The kitbot does **not** need the `imu`. Leave it out — tank drive doesn't use it.
+`left_drive` and `right_drive` are the names in goBILDA's own instructions, so if you
+followed their build, they're already right.
 
 Save the configuration and **activate** it.
 
@@ -155,33 +182,49 @@ an improvement on something that already moves.
 
 ### Then the two checks that matter
 
+**On the practice bot (mecanum):**
+
 1. **Push the left stick forward.** All four wheels must spin *forward*.
    - If one spins backwards, that motor is reversed. Tell a mentor which one — it's a
      one-line fix.
-2. **Push the left stick right** (mecanum only). Looking down from above, the wheels
+2. **Push the left stick right.** Looking down from above, the wheels
    should make an **X** shape.
    - If the robot tries to *spin* instead, two motors are in the wrong ports.
 
+**On the kitbot (tank):**
+
+1. **Push the left stick forward.** Both wheels must spin *forward*.
+   - If one side spins backwards, that side's motor is reversed. Tell a mentor which
+     side — it's a one-line fix.
+2. **Push the left stick right.** The robot should spin **clockwise** seen from above.
+   - If it turns the wrong way, that's a one-line fix too.
+
 Only now put it on the floor.
 
-If it drives fine forwards but crabs sideways whenever you turn, a wheel's rollers are
-mounted the wrong way round. That's a **building** problem, not a code problem — the
-rollers on the four wheels should form an X when you look down at the robot.
+If the practice bot drives fine forwards but crabs sideways whenever you turn, a wheel's
+rollers are mounted the wrong way round. That's a **building** problem, not a code
+problem — the rollers on the four wheels should form an X when you look down at the
+robot.
 
 ---
 
 ## Part 4 — The real driving code
 
-`2. Mecanum TeleOp` is the one you'll actually compete with. It needs all four motors
-**and** the IMU.
+Which OpMode you run depends on which robot you're on:
+
+- **Practice bot (mecanum):** `2. Mecanum TeleOp`. Needs all four motors **and** the IMU.
+- **Kitbot (tank):** `2. Tank TeleOp (kitbot)`. Needs just the two drive motors. No IMU.
+
+They are deliberately controlled the same way, so you can go from one robot to the other
+without relearning anything:
 
 | Control | What it does |
 |---|---|
-| Left stick | Drive and slide |
+| Left stick | Drive (and slide, on the practice bot only) |
 | Right stick, left/right | Turn |
 | Right trigger | Slow down for lining up precisely. Squeeze harder, go slower. |
-| `options` button | Sets "forward" to whichever way the robot is pointing right now |
-| `back` button | Switches between field-centric and robot-centric |
+| `options` button | *(practice bot only)* Sets "forward" to whichever way the robot points now |
+| `back` button | *(practice bot)* field-centric vs robot-centric; *(kitbot)* arcade vs tank steering |
 | Right bumper | Run the intake. Hold it down; let go to stop. |
 | Left bumper | Run the intake backwards, to clear a jam |
 | D-pad up / down | Raise / lower the lift. Hold it down; let go to stop. |
@@ -191,12 +234,15 @@ each one on its own and see which way it turns. If the two lift motors fight eac
 other, tell a mentor — it's a one-line fix in `AttachmentMotors.java`. As always:
 **wheels off the ground, and keep fingers clear of the lift, while testing.**
 
-Start in **field-centric**. Point the robot away from you, press `options`, then
-drive. Pushing the stick away from you moves the robot away from you, even after it
-spins around. Most drivers find this much easier.
+**Practice bot only — start in field-centric.** Point the robot away from you, press
+`options`, then drive. Pushing the stick away from you moves the robot away from you,
+even after it spins around. Most drivers find this much easier.
 
 If the robot starts drifting the wrong way later in a match, press `options` again
 while it's pointing away from you. That re-zeroes it.
+
+The kitbot doesn't have field-centric — a tank base can only go the way it points — so
+ignore the `options` button on it. Everything else is the same.
 
 ## Part 5 — The camera
 
@@ -294,6 +340,7 @@ tennis ball, cafeteria, lights on" is a useful note. "41" on its own is not.
 | Robot drives, but sideways is wrong | Two motors swapped in the configuration | Swap them in the configuration |
 | One wheel spins the wrong way | That motor needs reversing in code | Ask a mentor, note *which* wheel |
 | Robot crabs when turning | A mecanum wheel is built on the wrong corner | Look down at the robot: rollers should form an X |
+| Tank robot won't turn, or turns the wrong way | A side's direction constant is wrong | Ask a mentor; it's in `TankDrivebase.java` |
 | Camera sees nothing | Lighting changed, or the colour settings need adjusting | See "Numbers you can change" |
 | Everything was fine yesterday | Someone changed something | `git status` shows what changed |
 
@@ -320,9 +367,14 @@ In `MecanumDrivebase.java`:
   so this gives sideways a boost. Drive a taped square on the floor; if the sideways
   legs come out short, raise it a little.
 
-In `MecanumTeleOp.java`:
+In `MecanumTeleOp.java` or `TankTeleOp.java`:
 
 - `CREEP_SCALE` — how slow the precision trigger makes you go.
+
+In `TankDrivebase.java` (kitbot only):
+
+- `LEFT_REVERSE` / `RIGHT_REVERSE` — flip one if a side drives backwards when you push
+  the stick forward. Test on blocks.
 
 **Leave these alone unless a mentor is with you** — they were measured, not guessed,
 and changing them makes the robot confidently wrong rather than obviously broken:
