@@ -73,11 +73,22 @@ public class SimpleDriveTeleOp extends LinearOpMode {
         }
 
         // The left and right motors face opposite directions on the robot, so one
-        // side has to be told to run backwards for "forward" to mean forward.
-        frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
-        if (backLeft != null) backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
-        frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
-        if (backRight != null) backRight.setDirection(DcMotorSimple.Direction.FORWARD);
+        // side has to be told to run backwards for "forward" to mean forward. WHICH
+        // side is reversed differs between the two robots, so this matches each
+        // drivebase's own convention rather than assuming one:
+        //   four motors -> MecanumDrivebase: left reversed, right forward
+        //   two motors  -> TankDrivebase (goBILDA kitbot): left forward, right reversed
+        // If a side drives the wrong way, fix it in the drivebase classes so every
+        // OpMode stays in agreement -- not here.
+        if (fourWheel) {
+            frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+            backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
+            frontRight.setDirection(DcMotorSimple.Direction.FORWARD);
+            backRight.setDirection(DcMotorSimple.Direction.FORWARD);
+        } else {
+            frontLeft.setDirection(DcMotorSimple.Direction.FORWARD);
+            frontRight.setDirection(DcMotorSimple.Direction.REVERSE);
+        }
 
         telemetry.addLine(fourWheel ? "Found 4 motors -- mecanum driving."
                                     : "Found 2 motors -- tank driving.");
