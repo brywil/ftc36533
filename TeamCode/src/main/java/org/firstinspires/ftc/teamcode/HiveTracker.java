@@ -116,28 +116,18 @@ public class HiveTracker {
             double tilt   = tiltFromHorizontal(pose);
             double height = tagHeightAboveTiles(pose);
 
-            String reject = null;
+            // Keep the webcam's own message (a percentage) rather than the shared
+            // count, so existing bench output reads the same; -1 tells the gate not
+            // to re-check cluster completeness.
+            String partial = null;
             if (cluster.percentClusterFound < HiveGeometry.MIN_CLUSTER_PERCENT) {
-                reject = "partial cluster (" + cluster.percentClusterFound + "%)";
+                partial = "partial cluster (" + cluster.percentClusterFound + "%)";
             }
+            HiveGate.Verdict verdict = HiveGate.evaluate(tilt, height, -1);
 
-            HiveGeometry.Slot slotByHeight = slotFromHeight(height);
-            HiveGeometry.Slot slotByTilt   = slotFromTilt(tilt);
-
-            if (reject == null && slotByHeight == HiveGeometry.Slot.UNKNOWN) {
-                reject = String.format("height %.1f in matches neither slot", height);
-            }
-            if (reject == null && slotByTilt == HiveGeometry.Slot.UNKNOWN) {
-                reject = String.format("tilt %.1f deg is mid-swing", tilt);
-            }
-            // The two tests are independent, so disagreement means one of them is
-            // lying -- a bad solve, a mirrored pose, or a miscalibrated camera
-            // pitch. Refuse rather than pick a winner.
-            if (reject == null && slotByHeight != slotByTilt) {
-                reject = "tilt and height disagree on slot";
-            }
-
-            HiveGeometry.Slot slot = (reject == null) ? slotByHeight : HiveGeometry.Slot.UNKNOWN;
+            String reject = (partial != null) ? partial : verdict.rejectReason;
+            HiveGeometry.Slot slot =
+                    (reject == null) ? verdict.slot : HiveGeometry.Slot.UNKNOWN;
 
             out.add(new Observation(cell, slot, pose.range, pose.bearing, pose.elevation,
                     tilt, height, cluster.percentClusterFound, reject == null, reject));
@@ -177,23 +167,15 @@ public class HiveTracker {
         return HiveGeometry.CAMERA_HEIGHT_IN + pose.range * Math.sin(Math.toRadians(lookUpDeg));
     }
 
+    /** @deprecated the gate moved to {@link HiveGate#slotFromHeight}; kept for callers. */
+    @Deprecated
     public static HiveGeometry.Slot slotFromHeight(double heightIn) {
-        if (Math.abs(heightIn - HiveGeometry.LOW_TAG_HEIGHT_IN) <= HiveGeometry.HEIGHT_TOL_IN) {
-            return HiveGeometry.Slot.LOW;
-        }
-        if (Math.abs(heightIn - HiveGeometry.HIGH_TAG_HEIGHT_IN) <= HiveGeometry.HEIGHT_TOL_IN) {
-            return HiveGeometry.Slot.HIGH;
-        }
-        return HiveGeometry.Slot.UNKNOWN;
+        return HiveGate.slotFromHeight(heightIn);
     }
 
+    /** @deprecated the gate moved to {@link HiveGate#slotFromTilt}; kept for callers. */
+    @Deprecated
     public static HiveGeometry.Slot slotFromTilt(double tiltDeg) {
-        if (Math.abs(tiltDeg - HiveGeometry.SETTLED_TILT_LOW_DEG) <= HiveGeometry.TILT_TOL_DEG) {
-            return HiveGeometry.Slot.LOW;
-        }
-        if (Math.abs(tiltDeg - HiveGeometry.SETTLED_TILT_HIGH_DEG) <= HiveGeometry.TILT_TOL_DEG) {
-            return HiveGeometry.Slot.HIGH;
-        }
-        return HiveGeometry.Slot.UNKNOWN;
+        return HiveGate.slotFromTilt(tiltDeg);
     }
 }

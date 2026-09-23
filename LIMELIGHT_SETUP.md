@@ -257,6 +257,41 @@ them makes the robot confidently wrong rather than obviously broken:
 
 ---
 
+## 8b. A second pipeline, for AprilTags
+
+The ball detector is one pipeline. To also recognize the HIVE's AprilTags, the
+Limelight runs a **second** pipeline of type **Fiducial** at the same time — you do
+not paste any Python for this one, it is built in.
+
+On the web page, pick a different pipeline slot (say pipeline 1) and set:
+
+| setting | value | why |
+|---|---|---|
+| Pipeline Type | **Fiducial** | the AprilTag detector |
+| Tag Family | **36h11** | what BIOBUZZ §9.9 uses |
+| 3D | **on** | without it you get IDs and angles, but no distance or tilt |
+
+The robot can only switch between pipelines by **number** (`pipelineSwitch`), not by
+name, so remember which slot you put it in. `LimelightHiveBenchOpMode` defaults to
+pipeline 0; change `FIDUCIAL_PIPELINE` to match.
+
+Then run `4. HIVE Bench (Limelight)` on the Driver Station. Point it at any AprilTag
+and it lists `id`, `family`, and angles. Point it at a HIVE CELL's four-tag sticker
+and it groups them into a cluster and prints the settled-gate verdict — the same
+tilt/height test `HiveBenchOpMode` applies on a webcam.
+
+> **A tag prints ID and angles but says "no 3D pose".** The 3D toggle is off, or the
+> tag is too small/motion-blurred to solve. Fix the toggle first; tilt and height
+> both depend on the 3D pose.
+
+> **The tilt midpoint is not zero when you calibrate.** `LIMELIGHT_PITCH_DEG` is
+> wrong by exactly the midpoint, same as the webcam path. The bench OpMode prints
+> the correction.
+
+> **The high endpoint reads below the low one.** Flip `LIMELIGHT_TILT_SIGN`. The two
+> camera paths label pitch in different conventions, so this sign is its own constant
+> — the webcam's `PITCH_SIGN` does not transfer.
+
 ## 9. Telling the robot which ball to hunt
 
 Once there *is* a robot, it can ask for one colour instead of all three — worth doing,

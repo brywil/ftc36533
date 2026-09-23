@@ -87,9 +87,16 @@ public final class HiveGeometry {
 
         public static Cell fromTagId(int id) {
             for (Cell c : values()) {
-                if (id >= c.baseId && id <= c.baseId + 3) return c;
+                if (id >= c.baseId && id <= c.baseId + CLUSTER_MEMBER_COUNT - 1) return c;
             }
             return null;
+        }
+
+        /** The four member IDs of this cluster, e.g. 30, 31, 32, 33. */
+        public int[] memberIds() {
+            int[] ids = new int[CLUSTER_MEMBER_COUNT];
+            for (int i = 0; i < ids.length; i++) ids[i] = baseId + i;
+            return ids;
         }
     }
 
@@ -107,6 +114,29 @@ public final class HiveGeometry {
      */
     public static final double CAMERA_HEIGHT_IN = 8.0;
     public static final double CAMERA_PITCH_DEG = 20.0;   // up from horizontal, positive
+
+    /*
+     * The Limelight 3A mount, kept separate from the webcam's because it is a
+     * different camera in a different place. Used by LimelightHiveTracker.
+     *
+     * Its fiducial pipeline reports each tag as a camera-space Pose3D in the
+     * OpenCV convention: x right, y down, z forward, with yaw/pitch/roll angles.
+     * The camera's own mounting pitch rotates about the same axis as the tag
+     * plane's tilt, so the two simply add -- which is why one measured pitch
+     * number is enough. Roll would couple them into a matrix; check it is near
+     * zero on the bench before trusting a single-axis correction.
+     */
+    public static final double LIMELIGHT_HEIGHT_IN = 10.0;
+    public static final double LIMELIGHT_PITCH_DEG = 0.0;   // up from horizontal, positive
+
+    /**
+     * Sign of the target's camera-space pitch relative to "tag leaning away from
+     * the camera". Same role as PITCH_SIGN does for the webcam, but the two
+     * hardware paths label pitch in different conventions, so it is a separate
+     * constant. Do not reason it out -- run LimelightHiveBenchOpMode, tilt a CELL,
+     * and see which way the number moves.
+     */
+    public static final double LIMELIGHT_TILT_SIGN = 1.0;
 
     /**
      * Sign of AprilTagPoseFtc.pitch relative to "tag leaning away from the camera".
@@ -137,6 +167,9 @@ public final class HiveGeometry {
 
     /** Require the full cluster. A partial solve on 3.25 in. tags is not worth trusting. */
     public static final int MIN_CLUSTER_PERCENT = 100;
+
+    /** How many AprilTags make up one CELL's cluster (Section 9.9: four). */
+    public static final int CLUSTER_MEMBER_COUNT = 4;
 
     /**
      * Reject solves seen at a steep incidence to the tag plane. The tags lean 30 deg
