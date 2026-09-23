@@ -277,6 +277,12 @@ Calibrate` to do the measuring (it prints the numbers to copy into the code) and
 `6. Shooter (Limelight)` to shoot. A mentor should be with you; a flywheel is a
 spinning wheel and a ball is going somewhere fast.
 
+**Aiming** is `7. Auto Aim (AprilTag)`. Instead of you turning the robot by eye, the
+Limelight sees which way the target's tag is off-centre and the robot turns itself to
+line up. You still drive; it only takes over turning. **Wheels off the ground the first
+time** — and watch which way it turns: if it turns *away* from the tag, tell a mentor,
+because that's a one-line sign flip (`AutoAim.TURN_SIGN`).
+
 You can test the POLLEN finder on a laptop with no camera at all:
 
 ```bash

@@ -168,12 +168,36 @@ public class LimelightHiveTracker {
      * than the HIVE cluster machinery.
      */
     public Double nearestRangeIn() {
-        Double best = null;
+        Tag t = nearestTag();
+        return (t == null || Double.isNaN(t.rangeIn)) ? null : t.rangeIn;
+    }
+
+    /**
+     * The nearest tag in view, HIVE tag or not, or null when there is none. This is
+     * the natural target for a shooter or an auto-aim: the thing you are pointing
+     * at is the thing you mean to hit. Distance is the usual tie-break -- the
+     * closest tag is the one the camera is most likely looking straight at.
+     */
+    public Tag nearestTag() {
+        Tag best = null;
         for (Tag t : recognize()) {
-            if (Double.isNaN(t.rangeIn)) continue;
-            if (best == null || t.rangeIn < best) best = t.rangeIn;
+            // A tag without a 3D pose has NaN range, and every comparison against
+            // NaN is false -- so a plain "<" would keep the first tag seen rather
+            // than the nearest. Prefer any tag that has a real range.
+            if (best == null) { best = t; continue; }
+            boolean bestHasRange = !Double.isNaN(best.rangeIn);
+            boolean thisHasRange = !Double.isNaN(t.rangeIn);
+            if (thisHasRange && (!bestHasRange || t.rangeIn < best.rangeIn)) best = t;
         }
         return best;
+    }
+
+    /** The tag with this ID, or null when it is not in view. Pin one target to ignore others. */
+    public Tag tagWithId(int id) {
+        for (Tag t : recognize()) {
+            if (t.id == id) return t;
+        }
+        return null;
     }
 
     /**

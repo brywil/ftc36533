@@ -216,6 +216,41 @@ The distance comes from the **Limelight's range to whatever AprilTag it is looki
 at** — the same number `4. HIVE Bench` prints. Put a tag on the goal; it need not be
 a HIVE tag. `ShooterOpMode` picks the nearest tag in view.
 
+### Auto-aim
+
+`AutoAim` turns the target's bearing (`tx`, the same number `4. HIVE Bench` prints)
+into a turn command that centers the tag. `7. Auto Aim (AprilTag)` applies that to the
+drivetrain: the driver keeps the left stick, and the aim controller owns the turn axis
+only. Run it standalone first — the one thing you must see, not reason about, is
+whether the robot turns the **right way** toward the tag.
+
+**A lost target is a safety case.** When the tag leaves the frame the bearing does not
+exist, so the controller stops rather than turning on the last angle it saw. That
+matters because turning fast blurs the tag out of view, so "turn harder to recover" is
+often what loses it in the first place. No bearing means no turn; recovery is the
+driver's job, or a future search mode.
+
+**Tuning order: direction, then KP, then KD.** Confirm `TURN_SIGN` on blocks first
+(flip it if the robot turns away). Then raise `KP` until it turns briskly without
+screaming across, and only add `KD` if it hunts side to side around center. `DEADBAND_DEG`
+must be larger than the camera's angle noise (a few tenths of a degree) or the robot can
+never report SETTLED. `AIM_OFFSET_DEG` cancels a shooter that points off the camera's
+axis, or shots that land consistently to one side. All of these are constants in
+`AutoAim.java`, and the header there is the reference.
+
+The controller has no hardware in it — it takes a bearing and returns a number — so the
+same class can drive a turret or a servo later without changing the control loop.
+
+| control (`7. Auto Aim (AprilTag)`) | does |
+|---|---|
+| left stick | drive (and slide, on mecanum) — always the driver's |
+| A | aim on / off |
+| right stick L/R | turn by hand, while aim is off |
+| B | hold for a manual turn override while aim is on |
+
+Both `6. Shooter` and `7. Auto Aim` currently aim at the **nearest** tag in view;
+`AutoAimOpMode.TARGET_TAG_ID` pins aim to one tag ID if the field has other tags around.
+
 ### Bring it up on blocks, in this order
 
 **Mecanum (practice bot):**
@@ -373,6 +408,8 @@ Doubling the width doubles the focal length and therefore the apparent radius.
 | `TeamCode/.../HiveBenchOpMode.java` | webcam bench bring-up, runs on a single lifted CELL |
 | `TeamCode/.../LimelightHiveTracker.java` | the same gate read off the Limelight 3A instead |
 | `TeamCode/.../LimelightHiveBenchOpMode.java` | Limelight bench bring-up, plus raw tag recognition |
+| `TeamCode/.../AutoAim.java` | bearing → turn controller, hardware-free |
+| `TeamCode/.../AutoAimOpMode.java` | drives the turn axis to center a tag |
 | `tools/hive_gate_sim.py` | sweeps the arc and checks the gate thresholds offline |
 
 ### Why the HIVE can be localized against
