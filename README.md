@@ -167,6 +167,55 @@ Both are **hold-to-run**, so the safe failure is always "let go". A lift motor t
 fights its twin is a reversed motor: flip `LIFT_LEFT_REVERSE` / `LIFT_RIGHT_REVERSE`
 in `AttachmentMotors.java`. Test on blocks before the lift can hit anything.
 
+### The shooter
+
+`Shooter` owns a flywheel motor (`flywheel`) and an optional feed motor (`feed`). It
+turns a distance into a flywheel power so a shot travels that far. Run
+`5. Shooter Calibrate` to measure the distance→power points, then `6. Shooter
+(Limelight)` to shoot using them.
+
+**Why there is no physics formula.** Ball range depends on exit speed, which depends
+on wheel speed, but the chain between them is not clean: the wheel slips against the
+ball, the ball launches at some angle, drag acts on it, and the target sits some
+height above the muzzle. A formula would need every one of those measured anyway,
+and getting one wrong makes the robot confidently wrong. So the mapping is a
+**measured table** — `Shooter.RANGE_POWER_TABLE`, `{inches, power}` pairs, nearest
+first — and between points the code interpolates. Beyond the last measured point it
+clamps rather than extrapolates, because extrapolating past the farthest point is
+how a shot becomes a guess.
+
+**No encoder, so power is not speed.** The flywheel is open-loop; the same power
+gives a slightly different wheel speed as the battery drains over a match. The table
+is a best fit, not a guarantee — re-measure a point late in a pack to see the drift.
+If an encoder is added later, the upgrade is to table wheel *velocity* instead of
+power; `Shooter.rangeToPower` is the only place that changes.
+
+**It fails closed.** Until `Shooter.MIN_POINTS` are recorded the table cannot answer,
+and both OpModes refuse to fire and say why, rather than spraying at a guessed power.
+The four points shipped in the file are placeholders that only make the interpolation
+runnable; replace them.
+
+| control (`5. Shooter Calibrate`) | does |
+|---|---|
+| dpad up / down | flywheel power ±0.01 |
+| dpad left / right | flywheel power ±0.05 |
+| right bumper | run the feed — hold to launch a ball |
+| A | record {current tag range, current power} |
+| B | clear recorded points |
+| X | spin the flywheel up / down |
+
+| control (`6. Shooter (Limelight)`) | does |
+|---|---|
+| A | arm / disarm the flywheel |
+| B | toggle AUTO (table) / MANUAL (fixed power) |
+| dpad up / down | manual power |
+| right bumper | feed, once the wheel is spun up |
+| left bumper | reverse the feed — clears a jam |
+
+The distance comes from the **Limelight's range to whatever AprilTag it is looking
+at** — the same number `4. HIVE Bench` prints. Put a tag on the goal; it need not be
+a HIVE tag. `ShooterOpMode` picks the nearest tag in view.
+
 ### Bring it up on blocks, in this order
 
 **Mecanum (practice bot):**
@@ -319,8 +368,11 @@ Doubling the width doubles the focal length and therefore the apparent radius.
 | file | what |
 |---|---|
 | `TeamCode/.../HiveGeometry.java` | every constant, split into quoted-from-manual and must-measure |
-| `TeamCode/.../HiveTracker.java` | cluster detection plus the settled/mid-swing gate |
-| `TeamCode/.../HiveBenchOpMode.java` | bench bring-up, runs on a single lifted CELL |
+| `TeamCode/.../HiveGate.java` | the settled/mid-swing decision, shared by both trackers |
+| `TeamCode/.../HiveTracker.java` | webcam cluster detection, feeding the gate |
+| `TeamCode/.../HiveBenchOpMode.java` | webcam bench bring-up, runs on a single lifted CELL |
+| `TeamCode/.../LimelightHiveTracker.java` | the same gate read off the Limelight 3A instead |
+| `TeamCode/.../LimelightHiveBenchOpMode.java` | Limelight bench bring-up, plus raw tag recognition |
 | `tools/hive_gate_sim.py` | sweeps the arc and checks the gate thresholds offline |
 
 ### Why the HIVE can be localized against
@@ -372,11 +424,25 @@ field pose: `HiveGeometry.SLOT_POSES_MEASURED` is `false` because the four slot 
 have to be measured off a real field first. §9.9 says the Reference Holes are the
 intended way to do that, which is also why the SDK ships every cluster at (0,0,0).
 
-It uses the **FTC SDK vision pipeline with a USB webcam** (configured as `Webcam 1`),
-not the Limelight — the SDK has native four-tag cluster fusion via
-`getBioBuzzTagLibrary()`, and the 13 in. baseline across a cluster is what makes yaw
-trustworthy on 3.25 in. tags. A Limelight path would need a hand-authored `.fmap` and
-its own cluster fusion; worth doing later, not for a proof of concept.
+The default path uses the **FTC SDK vision pipeline with a USB webcam** (configured as
+`Webcam 1`) — the SDK has native four-tag cluster fusion via `getBioBuzzTagLibrary()`,
+and the 13 in. baseline across a cluster is what makes yaw trustworthy on 3.25 in.
+tags.
+
+There is now a second path, `LimelightHiveTracker`, that reads the same HIVE off the
+**Limelight 3A** fiducial pipeline. It shares the identical gate (`HiveGate`), but the
+Limelight has no cluster fusion, so it groups the four member IDs itself and averages
+their camera-space poses. That is weaker than the SDK's baseline solve — good enough
+for the gate, which needs range and angles, but not something to steer a yaw by. It
+uses no `.fmap`: tag field poses are still unmeasured, so it reports the same range /
+bearing / slot / settled verdict the webcam path does, never a field pose.
+
+To try it: put a Limelight pipeline in **Fiducial** mode (36h11, 3D solve **on**),
+then run `4. HIVE Bench (Limelight)`. It also lists every tag it sees — HIVE tag or
+not — which is the quickest way to answer "is the camera recognizing tags at all". Its
+camera constants (`LIMELIGHT_HEIGHT_IN`, `LIMELIGHT_PITCH_DEG`, `LIMELIGHT_TILT_SIGN`)
+are separate from the webcam's and, like them, start as guesses: calibrate with the
+same A/B capture procedure described above.
 
 ## Running the vision code without a camera
 

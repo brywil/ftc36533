@@ -39,6 +39,8 @@ public class HardwareCheck extends LinearOpMode {
             {"intake",     "intake"},
             {"lift left",  "lift_left"},
             {"lift right", "lift_right"},
+            {"flywheel",   "flywheel"},
+            {"feed",       "feed"},
     };
 
     @Override

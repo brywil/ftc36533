@@ -118,6 +118,8 @@ rollers set at an angle, is mecanum. Two motors, one per side, is tank.
 | Intake motor | `intake` |
 | Left lift motor | `lift_left` |
 | Right lift motor | `lift_right` |
+| Flywheel shooter motor (if you have one) | `flywheel` |
+| Feed motor (optional) | `feed` |
 | The Control Hub's built-in IMU | `imu` |
 | The camera (if you have one plugged in) | `Webcam 1` |
 
@@ -130,6 +132,8 @@ rollers set at an angle, is mecanum. Two motors, one per side, is tank.
 | Intake motor | `intake` |
 | Left lift motor | `lift_left` |
 | Right lift motor | `lift_right` |
+| Flywheel shooter motor (if you have one) | `flywheel` |
+| Feed motor (optional) | `feed` |
 | The camera (if you have one plugged in) | `Webcam 1` |
 
 The kitbot does **not** need the `imu`. Leave it out — tank drive doesn't use it.
@@ -229,10 +233,15 @@ without relearning anything:
 | Left bumper | Run the intake backwards, to clear a jam |
 | D-pad up / down | Raise / lower the lift. Hold it down; let go to stop. |
 
-The intake and lift motors are listed in `0. Hardware Check` too, so you can spin
-each one on its own and see which way it turns. If the two lift motors fight each
+The intake, lift and flywheel motors are listed in `0. Hardware Check` too, so you can
+spin each one on its own and see which way it turns. If the two lift motors fight each
 other, tell a mentor — it's a one-line fix in `AttachmentMotors.java`. As always:
 **wheels off the ground, and keep fingers clear of the lift, while testing.**
+
+**The flywheel is different from the other attachments.** It is not hold-to-run on a
+bumper: it spins fast and stays fast, and a ball fed into a spinning wheel goes a long
+way. Do not test it near anyone, and never put a hand near the wheel while it is armed.
+See Part 5 for the two flywheel OpModes and what they need measured first.
 
 **Practice bot only — start in field-centric.** Point the robot away from you, press
 `options`, then drive. Pushing the stick away from you moves the robot away from you,
@@ -252,10 +261,21 @@ Two separate things, don't mix them up:
 `snapscript/ball_detector.py`. You paste it into the Limelight's web page, in the
 Python tab. The robot then asks the camera "do you see a ball, and where?"
 
-**Finding the HIVE** runs *on the Control Hub* using a regular webcam. Run
-`3. HIVE Bench (AprilTag)` and point the camera at a HIVE cell's sticker.
-This one is still being built and needs measuring before it's useful — a mentor should
-be with you for it.
+**Finding the HIVE** can run either on the Control Hub with a regular webcam — run
+`3. HIVE Bench (AprilTag)` — or *inside the Limelight* with its built-in AprilTag
+detector — run `4. HIVE Bench (Limelight)`. Both point at a HIVE cell's sticker and
+print what they see. The Limelight one also has a mode where it just lists every tag in
+front of it, which is the easiest way to check "can it see tags at all?". Both are
+still being built and need measuring before they're useful — a mentor should be with
+you for it.
+
+**Shooting the right distance** uses the Limelight to measure how far away a tag on
+the goal is, then spins the flywheel harder for far shots and softer for close ones.
+There is no clever formula for this — you have to *measure* it: stand at a few
+distances, find the power that scores, and write those down. Run `5. Shooter
+Calibrate` to do the measuring (it prints the numbers to copy into the code) and
+`6. Shooter (Limelight)` to shoot. A mentor should be with you; a flywheel is a
+spinning wheel and a ball is going somewhere fast.
 
 You can test the POLLEN finder on a laptop with no camera at all:
 
