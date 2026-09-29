@@ -243,6 +243,11 @@ bumper: it spins fast and stays fast, and a ball fed into a spinning wheel goes 
 way. Do not test it near anyone, and never put a hand near the wheel while it is armed.
 See Part 5 for the two flywheel OpModes and what they need measured first.
 
+You can shoot straight from the drive OpMode too, using the buttons the driver isn't
+already using — **X** arms the flywheel, **left trigger** feeds a ball, **Y** switches
+between aiming-by-distance and a fixed power, and **B** clears a jam. You still have to
+point the robot at the target yourself in the drive OpModes.
+
 **Practice bot only — start in field-centric.** Point the robot away from you, press
 `options`, then drive. Pushing the stick away from you moves the robot away from you,
 even after it spins around. Most drivers find this much easier.

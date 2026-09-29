@@ -191,9 +191,31 @@ If an encoder is added later, the upgrade is to table wheel *velocity* instead o
 power; `Shooter.rangeToPower` is the only place that changes.
 
 **It fails closed.** Until `Shooter.MIN_POINTS` are recorded the table cannot answer,
-and both OpModes refuse to fire and say why, rather than spraying at a guessed power.
+and every OpMode refuses to fire and say why, rather than spraying at a guessed power.
 The four points shipped in the file are placeholders that only make the interpolation
 runnable; replace them.
+
+**Shooting is built into the drive TeleOps too.** `2. Mecanum` and `2. Tank` arm and
+fire on the driver's spare buttons, so a match driver scores without switching OpModes.
+The arm / manual-vs-auto / spin-up-gate / feed logic lives once in `ShooterControls`,
+shared by all three shooter-capable OpModes; each only maps buttons to it.
+
+The camera is **optional**: if `limelight` is not in the Robot Configuration the drive
+OpModes still drive, the shooter drops to MANUAL, and the telemetry says so. A missing
+`flywheel` motor likewise does nothing rather than crashing.
+
+| control (drive TeleOps: `2. Mecanum` / `2. Tank`) | does |
+|---|---|
+| X | arm / disarm the flywheel |
+| Y | AUTO (tag distance) / MANUAL (fixed power) |
+| left trigger | feed a ball — hold; only once the wheel is spun up |
+| B | reverse the feed — clears a jam |
+| dpad left / right | manual power − / + (in MANUAL) |
+
+Beware the collisions on gamepad1: `A`/`B` are still free, but on the drive TeleOps
+the dpad up/down is the **lift**, right/left bumpers are the **intake**, and the right
+trigger is **precision creep** — the shooter deliberately uses X, Y, left trigger, B
+and dpad left/right to avoid all of them.
 
 | control (`5. Shooter Calibrate`) | does |
 |---|---|

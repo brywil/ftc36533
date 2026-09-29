@@ -63,16 +63,25 @@ public class LimelightHiveTracker {
      *                      indexes pipelines 0..9; the SDK has no switch-by-name.
      */
     public LimelightHiveTracker(HardwareMap hardwareMap, String limelightName, int pipelineIndex) {
-        limelight = hardwareMap.get(Limelight3A.class, limelightName);
-        limelight.pipelineSwitch(pipelineIndex);
-        limelight.setPollRateHz(100);
+        // tryGet, not get: the camera is optional. A drive OpMode that also shoots
+        // must keep driving on a robot whose configuration has no Limelight, so a
+        // missing camera is a null, not an exception. hasLimelight() says which.
+        limelight = hardwareMap.tryGet(Limelight3A.class, limelightName);
+        if (limelight != null) {
+            limelight.pipelineSwitch(pipelineIndex);
+            limelight.setPollRateHz(100);
+        }
     }
 
+    /** True when the camera exists in the Robot Configuration. */
+    public boolean hasLimelight() { return limelight != null; }
+
+    /** The underlying device, or null when there is no camera. */
     public Limelight3A getLimelight() { return limelight; }
 
-    public void start() { limelight.start(); }
-    public void stop()  { limelight.stop();  }
-    public void close() { limelight.stop();  }
+    public void start() { if (limelight != null) limelight.start(); }
+    public void stop()  { if (limelight != null) limelight.stop();  }
+    public void close() { if (limelight != null) limelight.stop();  }
 
     /** One detected tag, HIVE tag or not. Angles in degrees, lengths in inches. */
     public static class Tag {
@@ -148,6 +157,7 @@ public class LimelightHiveTracker {
      */
     public List<Tag> recognize() {
         List<Tag> out = new ArrayList<>();
+        if (limelight == null) return out;
         LLResult result = limelight.getLatestResult();
         if (result == null || !result.isValid()) return out;
         if (result.getStaleness() > MAX_STALENESS_MS) return out;
