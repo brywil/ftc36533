@@ -27,7 +27,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  *                        wrong scales every distance and angle by the same factor.
  *   WHEEL_DIAMETER_IN    the driven wheel's real diameter, tape-measured. A 96 mm
  *                        goBILDA wheel is nominally 3.78 in, often quoted as "4".
- * @see #TRACK_WIDTH_IN    the distance between the centres of the left and right
+ *   TRACK_WIDTH_IN       the distance between the centres of the left and right
  *                        wheels. Measure it; it is what turns wheel travel into a
  *                        rotation angle. Wrong track width is why a "72 degree"
  *                        turn comes out as 65 or 80.
