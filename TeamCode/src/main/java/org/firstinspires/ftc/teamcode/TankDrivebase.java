@@ -96,6 +96,40 @@ public class TankDrivebase {
         setPowers(0, 0);
     }
 
+    /**
+     * Drive each side to an encoder count and stop there. This is the closed-loop
+     * move that autonomous is built from: give the left side a distance in ticks
+     * and the right side its own, and the motors run until each has covered it.
+     *
+     * The counts are in the same logical frame as {@link #driveRobotCentric}: +ticks
+     * means "this side forward", whichever motor was reversed in the Robot
+     * Configuration. So a straight move is (+t, +t), and a clockwise turn is
+     * (+t, -t) -- the caller, not this class, owns the geometry that turns inches
+     * and degrees into ticks.
+     *
+     * power is the magnitude to run at. Run-to-position drives toward the target
+     * from whichever side the motor is on, so the sign of power does not pick the
+     * direction -- the targets do.
+     */
+    public void driveToTicks(int leftTarget, int rightTarget, double power) {
+        left.setTargetPosition(leftTarget);
+        right.setTargetPosition(rightTarget);
+        left.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        right.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        left.setPower(Math.abs(power));
+        right.setPower(Math.abs(power));
+    }
+
+    /** The left side's encoder count, in the logical frame described above. */
+    public int leftTicks() {
+        return left.getCurrentPosition();
+    }
+
+    /** The right side's encoder count, in the logical frame described above. */
+    public int rightTicks() {
+        return right.getCurrentPosition();
+    }
+
     public void setZeroPowerBehavior(DcMotor.ZeroPowerBehavior behavior) {
         left.setZeroPowerBehavior(behavior);
         right.setZeroPowerBehavior(behavior);
