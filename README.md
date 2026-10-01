@@ -4,6 +4,8 @@ FTC team 36533 robot code for **BIOBUZZ** (2026-27). Right now that is a four-mo
 mecanum drivebase and a Limelight 3A pipeline that finds POLLEN, but this repo is the
 general home for the team's code — new subsystems go here.
 
+**Open to-do items for the team are in [`TODO.md`](TODO.md)** — start there.
+
 The two BIOBUZZ scoring elements, from the Section 16 glossary:
 
 | element | spec | why it matters here |
