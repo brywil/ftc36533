@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -36,6 +37,7 @@ import java.util.Locale;
  *     it rotates instead, two motors are swapped in the Robot Configuration.
  *  3. Only then set it on the floor.
  */
+@Disabled
 @TeleOp(name = "2. Mecanum TeleOp (field-centric)", group = "Drive")
 public class MecanumTeleOp extends LinearOpMode {
 

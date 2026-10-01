@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -27,6 +28,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
  *
  * Once this works, move on to "2. Mecanum TeleOp" for the real driving code.
  */
+@Disabled
 @TeleOp(name = "1. Simple Drive", group = "Bringup")
 public class SimpleDriveTeleOp extends LinearOpMode {
 

@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -27,6 +28,7 @@ import java.util.Locale;
  * Shooter.RANGE_VELOCITY_TABLE. Until at least Shooter.MIN_POINTS are present this
  * refuses to auto-fire, and says so.
  */
+@Disabled
 @TeleOp(name = "6. Shooter (Limelight)", group = "Drive")
 public class ShooterOpMode extends LinearOpMode {
 

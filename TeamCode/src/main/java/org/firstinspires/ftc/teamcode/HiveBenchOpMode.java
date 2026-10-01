@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -34,6 +35,7 @@ import java.util.Locale;
  *   X  reset the observed tilt range
  *   Y  reset the TIP counter
  */
+@Disabled
 @TeleOp(name = "3. HIVE Bench (AprilTag)", group = "Bringup")
 public class HiveBenchOpMode extends LinearOpMode {
 

@@ -14,6 +14,8 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
  *   left stick left/right turn
  *   right trigger         precision creep -- scales the drive down for lining up
  *   right bumper          intake (roller + servos) forward, AND windmill forward
+ *                         -- the windmill is GATED: it only feeds once the launcher
+ *                         wheel is measured at speed (telemetry says READY)
  *   left bumper           intake (roller + servos) forward only
  *   square                intake ROLLER reverse + windmill reverse; servos stay still
  *   dpad up / down        launcher speed -/+  (launcher runs in MANUAL, always on)
@@ -24,9 +26,11 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
  * needed and this OpMode does not use the camera at all.
  *
  * WINDMILL WITH THE INTAKE. The windmill is the feed servo that pushes balls into the
- * launcher. It runs forward with the right bumper (intake + feed together, so one press
- * loads and fires) and in reverse with square (clears a jam). The left bumper runs the
- * intake WITHOUT the windmill, so a driver can load without firing.
+ * launcher. It runs forward with the right bumper -- but only once the launcher wheel
+ * is measured at speed, so a press during spin-up is held, not lost: keep holding and
+ * it feeds the moment the gate opens. It runs in reverse with square (clears a jam,
+ * always allowed). The left bumper runs the intake WITHOUT the windmill, so a driver
+ * can load without firing.
  */
 @TeleOp(name = "2. Tank TeleOp (kitbot)", group = "Drive")
 public class TankTeleOp extends LinearOpMode {
@@ -74,19 +78,18 @@ public class TankTeleOp extends LinearOpMode {
             double scale = DRIVE_GAIN * (1.0 - (1.0 - CREEP_SCALE) * gamepad1.right_trigger);
             drive.driveRobotCentric(forward * scale, turn * scale);
 
-            // --- intake, servos and windmill, from the bumpers and square ---
-            // Computed separately because square reverses only the roller and the
-            // windmill -- the corner servos hold still, so reversing does not fight
-            // the roller.
-            double intakeMotor = 0.0, intakeServos = 0.0, windmill = 0.0;
+            // --- intake, from the bumpers and square ---
+            // The windmill is handled further down, through the spin-up gate -- so it
+            // is deliberately NOT in this chain, even though RB also runs the intake.
+            // Square reverses only the roller; the corner servos hold still, so
+            // reversing does not fight the roller.
+            double intakeMotor = 0.0, intakeServos = 0.0;
             if (gamepad1.square) {
                 intakeMotor = -1.0;   // reverse the roller to unjam / outake
-                windmill    = -1.0;   // push the ball back out of the launcher
                 // servos stay 0: they would fight the roller if reversed
             } else if (gamepad1.right_bumper) {
                 intakeMotor = 1.0;
                 intakeServos = 1.0;
-                windmill = 1.0;       // load and fire in one press
             } else if (gamepad1.left_bumper) {
                 intakeMotor = 1.0;
                 intakeServos = 1.0;
@@ -94,7 +97,15 @@ public class TankTeleOp extends LinearOpMode {
             }
             intake.setMotor(intakeMotor);
             intake.setServos(intakeServos);
-            shooter.shooter().setFeed(windmill);
+
+            // --- feed, through the spin-up gate ---
+            // Same rule every other OpMode feeds under: forward only once the wheel is
+            // measured at speed, reverse (square) always allowed for jam-clearing. The
+            // gate costs nothing in steady state -- an always-on launcher is already at
+            // speed -- and it closes the two windows a cold wheel has: the first
+            // seconds after START, and a stall mid-match. The square-reverse input
+            // also wins over RB here, which is what a jam deserves.
+            shooter.requestFeed(gamepad1.right_bumper && !gamepad1.square, gamepad1.square);
 
             // --- launcher: always spinning in MANUAL; dpad tunes the speed ---
             if (gamepad1.dpad_up   && !upPrev)   shooter.nudgeManualVelocity(+MANUAL_STEP);
@@ -111,11 +122,12 @@ public class TankTeleOp extends LinearOpMode {
 
             // --- telemetry ---
             telemetry.addData("drive", "fwd %+.2f  turn %+.2f", forward * scale, turn * scale);
-            telemetry.addData("intake", "motor %+.0f  servos %+.0f  windmill %+.0f",
-                    intakeMotor, intakeServos, windmill);
+            telemetry.addData("intake", "motor %+.0f  servos %+.0f",
+                    intakeMotor, intakeServos);
             telemetry.addData("launcher", "asked %.0f  actual %.0f ticks/s  %s",
                     shooter.getCommandedVelocity(), shooter.getVelocity(),
                     shooter.isSpunUp() ? "READY" : "spinning up");
+            telemetry.addData("feed", shooter.feedState());
             telemetry.addLine();
             telemetry.addLine("Left stick drives.  RB intake+fire  LB intake  square reverse");
             telemetry.addLine("dpad up/down = launcher speed");

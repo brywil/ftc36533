@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
@@ -22,6 +23,7 @@ import java.util.List;
  *
  * WHEELS OFF THE GROUND. Put the robot on blocks before you run this.
  */
+@Disabled
 @TeleOp(name = "0. Hardware Check (start here)", group = "Bringup")
 public class HardwareCheck extends LinearOpMode {
 

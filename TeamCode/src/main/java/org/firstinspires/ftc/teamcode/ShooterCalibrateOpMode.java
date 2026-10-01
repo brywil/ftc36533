@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -33,6 +34,7 @@ import java.util.Locale;
  *   A                record the current range and speed as a point
  *   B                clear all recorded points
  */
+@Disabled
 @TeleOp(name = "5. Shooter Calibrate", group = "Bringup")
 public class ShooterCalibrateOpMode extends LinearOpMode {
 
