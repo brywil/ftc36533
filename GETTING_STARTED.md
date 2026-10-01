@@ -115,11 +115,11 @@ rollers set at an angle, is mecanum. Two motors, one per side, is tank.
 | Front right motor | `front_right` |
 | Back left motor | `back_left` |
 | Back right motor | `back_right` |
-| Intake motor | `intake` |
-| Left lift motor | `lift_left` |
-| Right lift motor | `lift_right` |
-| Flywheel shooter motor (if you have one) | `flywheel` |
-| Feed motor (optional) | `feed` |
+| Intake roller motor | `intake` |
+| Left corner intake servo | `left_intake_servo` |
+| Right corner intake servo | `right_intake_servo` |
+| Launcher (shooter) motor | `launcher` |
+| Feed servo (windmill) | `windmill` |
 | The Control Hub's built-in IMU | `imu` |
 | The camera (if you have one plugged in) | `Webcam 1` |
 
@@ -129,11 +129,11 @@ rollers set at an angle, is mecanum. Two motors, one per side, is tank.
 |---|---|
 | Left side motor (all left wheels) | `left_drive` |
 | Right side motor (all right wheels) | `right_drive` |
-| Intake motor | `intake` |
-| Left lift motor | `lift_left` |
-| Right lift motor | `lift_right` |
-| Flywheel shooter motor (if you have one) | `flywheel` |
-| Feed motor (optional) | `feed` |
+| Intake roller motor | `intake` |
+| Left corner intake servo | `left_intake_servo` |
+| Right corner intake servo | `right_intake_servo` |
+| Launcher (shooter) motor | `launcher` |
+| Feed servo (windmill) | `windmill` |
 | The camera (if you have one plugged in) | `Webcam 1` |
 
 The kitbot does **not** need the `imu`. Leave it out — tank drive doesn't use it.
@@ -229,24 +229,21 @@ without relearning anything:
 | Right trigger | Slow down for lining up precisely. Squeeze harder, go slower. |
 | `options` button | *(practice bot only)* Sets "forward" to whichever way the robot points now |
 | `back` button | *(practice bot)* field-centric vs robot-centric; *(kitbot)* arcade vs tank steering |
-| Right bumper | Run the intake. Hold it down; let go to stop. |
+| Right bumper | Run the intake in. Hold it down; let go to stop. |
 | Left bumper | Run the intake backwards, to clear a jam |
-| D-pad up / down | Raise / lower the lift. Hold it down; let go to stop. |
+| X | Arm / disarm the launcher (the shooter wheel) |
+| Y | Aim-by-distance (AUTO) / fixed speed (MANUAL) |
+| A | Feed a ball — hold; only works once the wheel is up to speed |
+| B | Reverse the feed, to clear a jam |
 
-The intake, lift and flywheel motors are listed in `0. Hardware Check` too, so you can
-spin each one on its own and see which way it turns. If the two lift motors fight each
-other, tell a mentor — it's a one-line fix in `AttachmentMotors.java`. As always:
-**wheels off the ground, and keep fingers clear of the lift, while testing.**
+Every motor and servo is listed in `0. Hardware Check` too, so you can spin each one on
+its own and see which way it turns. As always: **wheels off the ground, and keep fingers
+clear of spinning parts, while testing.**
 
-**The flywheel is different from the other attachments.** It is not hold-to-run on a
-bumper: it spins fast and stays fast, and a ball fed into a spinning wheel goes a long
+**The launcher is different from everything else.** It is not hold-to-run on a bumper:
+once armed it spins fast and stays fast, and a ball fed into a spinning wheel goes a long
 way. Do not test it near anyone, and never put a hand near the wheel while it is armed.
-See Part 5 for the two flywheel OpModes and what they need measured first.
-
-You can shoot straight from the drive OpMode too, using the buttons the driver isn't
-already using — **X** arms the flywheel, **left trigger** feeds a ball, **Y** switches
-between aiming-by-distance and a fixed power, and **B** clears a jam. You still have to
-point the robot at the target yourself in the drive OpModes.
+See Part 5 for the two launcher OpModes and what they need measured first.
 
 **Practice bot only — start in field-centric.** Point the robot away from you, press
 `options`, then drive. Pushing the stick away from you moves the robot away from you,
@@ -275,11 +272,11 @@ still being built and need measuring before they're useful — a mentor should b
 you for it.
 
 **Shooting the right distance** uses the Limelight to measure how far away a tag on
-the goal is, then spins the flywheel harder for far shots and softer for close ones.
+the goal is, then spins the launcher faster for far shots and slower for close ones.
 There is no clever formula for this — you have to *measure* it: stand at a few
-distances, find the power that scores, and write those down. Run `5. Shooter
+distances, find the wheel speed that scores, and write those down. Run `5. Shooter
 Calibrate` to do the measuring (it prints the numbers to copy into the code) and
-`6. Shooter (Limelight)` to shoot. A mentor should be with you; a flywheel is a
+`6. Shooter (Limelight)` to shoot. A mentor should be with you; a launcher is a
 spinning wheel and a ball is going somewhere fast.
 
 **Aiming** is `7. Auto Aim (AprilTag)`. Instead of you turning the robot by eye, the

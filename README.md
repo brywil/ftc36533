@@ -94,8 +94,9 @@ field-centric driving off the IMU. A tank base has one motor per side and can on
 the way it points, so it has no strafe and no field-centric mode — those inputs do not
 exist on it. The two are genuinely different robots to the software, not a preference.
 
-Everything else — the intake/lift controls, the deadband, the precision-creep trigger —
-is shared, so a driver can move between the two robots without relearning the controls.
+Everything else — the intake/launcher controls, the deadband, the precision-creep
+trigger — is shared, so a driver can move between the two robots without relearning the
+controls.
 
 ### Setting up the practice bot (mecanum)
 
@@ -103,7 +104,9 @@ Robot Configuration names expected on the Control Hub:
 
 ```
 front_left   front_right   back_left   back_right      DcMotor
-intake     lift_left     lift_right                    DcMotor
+intake                                                 DcMotor
+launcher                                               DcMotorEx (encoder)
+left_intake_servo   right_intake_servo   windmill       CRServo
 imu                                                    built into the Control Hub
 limelight                                              Ethernet Device -> Limelight3A
 ```
@@ -132,7 +135,9 @@ Robot Configuration names expected on the Control Hub:
 
 ```
 left_drive   right_drive                              DcMotor
-intake     lift_left     lift_right                    DcMotor
+intake                                                 DcMotor
+launcher                                               DcMotorEx (encoder)
+left_intake_servo   right_intake_servo   windmill       CRServo
 limelight                                              Ethernet Device -> Limelight3A
 ```
 
@@ -150,87 +155,85 @@ by `max(|f| + |t|, 1)` the same way mecanum is — and `driveTank(left, right)`,
 drives each side from its own input for a classic two-stick driver. The OpMode starts
 in arcade and `back` toggles to tank steering.
 
-### Attachments
+### The intake
 
-`AttachmentMotors` owns one intake and two lift motors (names `intake`, `lift_left`,
-`lift_right`). They are simple open-loop spin motors — no encoders, no holding a
-position. Each is looked up with `tryGet`, so a missing name does not stop the
-drivebase working; `HardwareCheck` is where a wrong name shows up.
+`Intake` owns the roller motor (`intake`) and the two corner servos
+(`left_intake_servo`, `right_intake_servo`). They are one mechanism to the driver:
+one power drives all three, so they always agree. The right servo is reversed because
+it sits on the far side and pulls the other way (`Intake.RIGHT_SERVO_REVERSE`).
 
 | control | does |
 |---|---|
-| right bumper | run the intake, hold to run |
-| left bumper | run the intake reversed — clears a jam |
-| dpad up / down | raise / lower the lift, hold to run |
+| right bumper | intake in, hold to run |
+| left bumper | intake out — clears a jam |
 
-Both are **hold-to-run**, so the safe failure is always "let go". A lift motor that
-fights its twin is a reversed motor: flip `LIFT_LEFT_REVERSE` / `LIFT_RIGHT_REVERSE`
-in `AttachmentMotors.java`. Test on blocks before the lift can hit anything.
+Hold-to-run, so the safe failure is always "let go". Each device is `tryGet`, so a
+partially built intake still runs what is there; `HardwareCheck` names what is absent.
 
-### The shooter
+There is **no lift** on this robot. Earlier code drove two lift motors that do not
+exist on the StarterBot and were silently inert; they are gone.
 
-`Shooter` owns a flywheel motor (`flywheel`) and an optional feed motor (`feed`). It
-turns a distance into a flywheel power so a shot travels that far. Run
-`5. Shooter Calibrate` to measure the distance→power points, then `6. Shooter
+### The launcher (shooter)
+
+`Shooter` owns the launcher (`launcher`) and the feed servo (`windmill`). It turns a
+distance into a launcher **speed** so a shot travels that far. Run
+`5. Shooter Calibrate` to measure the distance→speed points, then `6. Shooter
 (Limelight)` to shoot using them.
 
-**Why there is no physics formula.** Ball range depends on exit speed, which depends
-on wheel speed, but the chain between them is not clean: the wheel slips against the
-ball, the ball launches at some angle, drag acts on it, and the target sits some
-height above the muzzle. A formula would need every one of those measured anyway,
-and getting one wrong makes the robot confidently wrong. So the mapping is a
-**measured table** — `Shooter.RANGE_POWER_TABLE`, `{inches, power}` pairs, nearest
-first — and between points the code interpolates. Beyond the last measured point it
-clamps rather than extrapolates, because extrapolating past the farthest point is
-how a shot becomes a guess.
+**Velocity, not power — because the launcher has an encoder.** The kit's launcher is a
+5203 Yellow Jacket with an encoder, so the code asks for a wheel *speed*
+(`RUN_USING_ENCODER` + `setVelocity`) and the SDK holds it, battery-independent. This
+is the opposite of the rest of the robot, which is open-loop. It is also why the
+launcher is a `DcMotorEx`, and why **the encoder cable must be plugged in** or nothing
+will ever feed (see `WIRING.md`).
 
-**No encoder, so power is not speed.** The flywheel is open-loop; the same power
-gives a slightly different wheel speed as the battery drains over a match. The table
-is a best fit, not a guarantee — re-measure a point late in a pack to see the drift.
-If an encoder is added later, the upgrade is to table wheel *velocity* instead of
-power; `Shooter.rangeToPower` is the only place that changes.
+**Why there is no physics formula.** Ball range depends on exit speed, which depends on
+wheel speed, but the chain is not clean: the wheel slips against the ball, the ball
+launches at an angle, drag acts on it, and the target sits above the muzzle. So the
+mapping is a **measured table** — `Shooter.RANGE_VELOCITY_TABLE`, `{inches, ticks/s}`
+pairs, nearest first — interpolated between points and clamped beyond them, because
+extrapolating past the farthest point is where a shot becomes a guess.
 
 **It fails closed.** Until `Shooter.MIN_POINTS` are recorded the table cannot answer,
-and every OpMode refuses to fire and say why, rather than spraying at a guessed power.
-The four points shipped in the file are placeholders that only make the interpolation
-runnable; replace them.
+and every OpMode refuses to fire and says why. The points shipped in the file are
+placeholders that only make the interpolation runnable; replace them.
 
 **Shooting is built into the drive TeleOps too.** `2. Mecanum` and `2. Tank` arm and
 fire on the driver's spare buttons, so a match driver scores without switching OpModes.
 The arm / manual-vs-auto / spin-up-gate / feed logic lives once in `ShooterControls`,
-shared by all three shooter-capable OpModes; each only maps buttons to it.
+shared by all three shooter-capable OpModes; each only maps buttons to it. The spin-up
+gate is a **real measurement** (`getVelocity()`), not a timer.
 
 The camera is **optional**: if `limelight` is not in the Robot Configuration the drive
 OpModes still drive, the shooter drops to MANUAL, and the telemetry says so. A missing
-`flywheel` motor likewise does nothing rather than crashing.
+`launcher` likewise does nothing rather than crashing.
 
 | control (drive TeleOps: `2. Mecanum` / `2. Tank`) | does |
 |---|---|
-| X | arm / disarm the flywheel |
-| Y | AUTO (tag distance) / MANUAL (fixed power) |
-| left trigger | feed a ball — hold; only once the wheel is spun up |
+| X | arm / disarm the launcher |
+| Y | AUTO (tag distance) / MANUAL (fixed speed) |
+| A | feed a ball — hold; only once the wheel is spun up |
 | B | reverse the feed — clears a jam |
-| dpad left / right | manual power − / + (in MANUAL) |
+| dpad up / down | manual speed − / + (in MANUAL) |
 
-Beware the collisions on gamepad1: `A`/`B` are still free, but on the drive TeleOps
-the dpad up/down is the **lift**, right/left bumpers are the **intake**, and the right
-trigger is **precision creep** — the shooter deliberately uses X, Y, left trigger, B
-and dpad left/right to avoid all of them.
+The layout is identical on both robots. Nothing collides: the right trigger is
+precision creep and the bumpers are the intake, so the launcher uses X, Y, A, B and
+the dpad.
 
 | control (`5. Shooter Calibrate`) | does |
 |---|---|
-| dpad up / down | flywheel power ±0.01 |
-| dpad left / right | flywheel power ±0.05 |
+| dpad up / down | wheel speed ±25 ticks/s |
+| dpad left / right | wheel speed ±100 ticks/s |
 | right bumper | run the feed — hold to launch a ball |
-| A | record {current tag range, current power} |
+| A | record {current tag range, current wheel speed} |
 | B | clear recorded points |
-| X | spin the flywheel up / down |
+| X | spin the launcher up / down |
 
 | control (`6. Shooter (Limelight)`) | does |
 |---|---|
-| A | arm / disarm the flywheel |
-| B | toggle AUTO (table) / MANUAL (fixed power) |
-| dpad up / down | manual power |
+| A | arm / disarm the launcher |
+| B | toggle AUTO (table) / MANUAL (fixed speed) |
+| dpad up / down | manual speed |
 | right bumper | feed, once the wheel is spun up |
 | left bumper | reverse the feed — clears a jam |
 
@@ -432,6 +435,10 @@ Doubling the width doubles the focal length and therefore the apparent radius.
 | `TeamCode/.../LimelightHiveBenchOpMode.java` | Limelight bench bring-up, plus raw tag recognition |
 | `TeamCode/.../AutoAim.java` | bearing → turn controller, hardware-free |
 | `TeamCode/.../AutoAimOpMode.java` | drives the turn axis to center a tag |
+| `TeamCode/.../Intake.java` | roller motor + two corner servos, driven together |
+| `TeamCode/.../Shooter.java` | launcher (encoder velocity) + feed servo, distance→speed table |
+| `TeamCode/.../ShooterControls.java` | arm / auto-manual / spin-up gate / feed, shared |
+| `TeamCode/.../ShooterCalibrateOpMode.java`, `ShooterOpMode.java` | measure and use the table |
 | `tools/hive_gate_sim.py` | sweeps the arc and checks the gate thresholds offline |
 
 ### Why the HIVE can be localized against
@@ -524,17 +531,26 @@ about whether the HSV bounds are right** — those need real footage.
 ## What is actually verified
 
 **Toolchain and Java — built for real.** `install.sh` was run end to end and `build.sh`
-produced `TeamCode-debug.apk` (51 MB) against FTC SDK v12.0, AGP 8.13.2, Gradle 9.1.0,
-compileSdk 30. `TankDrivebase` and `TankTeleOp` are present in the APK's dex along with
-the `Tank TeleOp (kitbot)` registration string, so the tank OpMode will list on the
-Driver Station alongside the mecanum one. The Java also compiles clean against the real
+produced `TeamCode-debug.apk` against FTC SDK v12.0, AGP 8.13.2, Gradle 9.1.0,
+compileSdk 30. The drive, HIVE, shooter and auto-aim OpModes are present in the APK's
+dex with their registration strings. The Java compiles clean against the real
 `RobotCore`/`Hardware` 12.0.0 jars, and every Limelight method it calls was checked
 against those jars with `javap`.
 
-**Not verified:** nothing has run on a Control Hub. No robot, no camera, no field. In
-particular the **tank drive is unexercised on hardware** — the two direction constants in
-`TankDrivebase` are reasoned from goBILDA's official StarterBot example code, not measured
-on our kitbot.
+**HIVE recognition ran on hardware.** With the Limelight on the hub and a fiducial
+pipeline configured, `4. HIVE Bench (Limelight)` was confirmed to recognize AprilTags.
+The camera constants (`LIMELIGHT_PITCH_DEG`, `LIMELIGHT_TILT_SIGN`) and the shooter's
+distance→speed table are still placeholders, and cannot be filled in without a field.
+
+**The hardware model matches goBILDA's official BIOBUZZ StarterBot.** Device names
+(`left_drive`, `right_drive`, `intake`, `launcher`, `windmill`, `left_intake_servo`,
+`right_intake_servo`), directions, and the launcher's encoder velocity control were
+taken from goBILDA's own `3200-2627-0003` example code, not guessed.
+
+**Not verified:** the drive, intake, launcher and feed have not run on a robot. In
+particular the tank direction constants and the launcher PIDF are goBILDA's values
+copied across, not measured on our kitbot, and the encoder cable that the launcher's
+closed loop depends on has not been checked in place.
 
 **Vision — exercised against synthetic frames**, `selftest.py` passes clean: detected
 across apparent radii of 10–130 px, which at the real POLLEN diameter is 1.31 m down to
