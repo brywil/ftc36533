@@ -61,7 +61,11 @@ public class MecanumTeleOp extends LinearOpMode {
         ShooterControls shooter = new ShooterControls(new Shooter(hardwareMap));
         LimelightHiveTracker tracker =
                 new LimelightHiveTracker(hardwareMap, "limelight", FIDUCIAL_PIPELINE);
-        if (!tracker.hasLimelight()) shooter.fallBackToManual();
+
+        // Same startup as TankTeleOp: the launcher spins up in MANUAL with no button,
+        // so the driver only tunes it and feeds. X and Y still allow changing it.
+        shooter.setManual(true);
+        shooter.setArmed(true);
 
         boolean fieldCentric = true;
         boolean backWasPressed = false;
