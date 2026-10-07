@@ -35,17 +35,21 @@ not a missed target.
 
 ---
 
-## 2. Make Autonomous stop if the encoders aren't working
+## 2. Make Autonomous stop if the encoders aren't working — CODE DONE, NOT YET TESTED ON THE ROBOT
 
 **What's wrong.** Even after #1, a cable can come loose. `runMove()` in
 `ForwardAndTurnAuto.java` only gives up when the timeout runs out.
 
-**What to do.** In `runMove()`, if neither side's encoder has moved after about half a
-second of driving, stop the motors and show "drive encoders not reading — check the
-cables" on the Driver Station.
+**What's done.** `runMove()` now checks each side on its own: if a side was asked to
+move but has counted 0 ticks after `ENCODER_STARTUP_GRACE_MS` (500 ms), it stops the
+motors and returns "STOPPED: ... drive encoder not reading -- check the cables" for the
+Driver Station. Per-side, because one loose cable lets the other side run on (the robot
+curves on the straight, or spins until timeout on the turn).
 
-**How to check.** Unplug one encoder cable, put the robot on blocks, run the auto. It
-should stop within a second and show the message.
+**STILL TO DO — verify on the robot.** This is written but has never run on hardware.
+Unplug one encoder cable, put the robot on blocks (wheels off the ground), run the auto.
+It should stop within about a second and show the message. If it does, delete this item
+from the list in the same commit as any fix.
 
 ---
 

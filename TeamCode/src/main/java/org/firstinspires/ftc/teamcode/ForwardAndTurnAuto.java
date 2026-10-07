@@ -41,7 +41,9 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * SAFETY: point the robot at open floor with room for two tiles plus a turn, and
  * keep clear. A dead-reckoned robot does not know it is wrong -- it drives its tick
  * count no matter what it is aimed at. If a move cannot reach its target it stops
- * on a timeout rather than running away, and says so on the Driver Station.
+ * on a timeout rather than running away, and says so on the Driver Station. If a
+ * side's encoder stops counting altogether, the move is stopped early instead of
+ * waiting out the timeout, because no amount of driving will ever "arrive".
  */
 @Autonomous(name = "8. Auto: 2 Squares Forward, Turn 72", group = "Auto")
 public class ForwardAndTurnAuto extends LinearOpMode {
@@ -93,6 +95,16 @@ public class ForwardAndTurnAuto extends LinearOpMode {
     public static final long FORWARD_TIMEOUT_MS = 8000;
     public static final long TURN_TIMEOUT_MS = 5000;
 
+    /**
+     * If neither side's encoder has counted a tick by this long into a move, treat
+     * the encoders as dead (usually an unplugged cable or the wrong port) and stop.
+     * Set above the motor's own startup lag so a normal move is not cut short.
+     */
+    public static final long ENCODER_STARTUP_GRACE_MS = 500;
+
+    /** The status string a move returns when it reached its target. */
+    private static final String REACHED = "reached";
+
     private TankDrivebase drive;
 
     @Override
@@ -124,39 +136,42 @@ public class ForwardAndTurnAuto extends LinearOpMode {
         waitForStart();
         if (isStopRequested()) return;
 
-        boolean forwardOk = runMove("forward " + format(SQUARES) + " squares",
+        String forwardResult = runMove("forward " + format(SQUARES) + " squares",
                 forwardTicks, forwardTicks, DRIVE_POWER, FORWARD_TIMEOUT_MS);
 
         // A clockwise spin is left side forward, right side backward. driveToTicks
         // takes the direction from the sign of each target, not from the power.
-        boolean turnOk = runMove("turn " + format(TURN_DEG) + " deg",
+        String turnResult = runMove("turn " + format(TURN_DEG) + " deg",
                 (int) (TURN_SIGN * turnTicks), (int) (-TURN_SIGN * turnTicks),
                 TURN_POWER, TURN_TIMEOUT_MS);
 
         drive.stop();
 
-        telemetry.addData("forward", forwardOk ? "reached" : "TIMED OUT -- check geometry");
-        telemetry.addData("turn", turnOk ? "reached" : "TIMED OUT -- check geometry");
+        telemetry.addData("forward", forwardResult);
+        telemetry.addData("turn", turnResult);
         telemetry.addLine();
         telemetry.addLine("Done. If a move timed out, the robot may be stuck or the");
         telemetry.addLine("ticks-per-inch is too low -- see the header of this file.");
+        telemetry.addLine("If it stopped on an encoder warning, check those cables.");
         telemetry.update();
 
-        // Hold the final position so the robot does not roll after the move.
+        // Leave the telemetry up for a moment so the result can be read on the
+        // Driver Station. stop() only brakes; nothing actively holds the robot.
         sleep(2000);
     }
 
     /**
      * Run both sides to a relative tick target and wait until they get there, or
-     * until the timeout. Returns true if the target was reached.
+     * until the timeout or an encoder failure. Returns a status string for the
+     * Driver Station: "reached", or why it stopped early.
      *
      * The target is relative to wherever the encoders are now, so the caller thinks
      * in "move this far", not "drive to some absolute count". Both sides are stopped
      * on the way out, reached or not -- a half-finished move must not leave a wheel
      * turning while the next one starts.
      */
-    private boolean runMove(String label, int leftDelta, int rightDelta,
-                            double power, long timeoutMs) {
+    private String runMove(String label, int leftDelta, int rightDelta,
+                           double power, long timeoutMs) {
         int leftStart  = drive.leftTicks();
         int rightStart = drive.rightTicks();
 
@@ -166,30 +181,54 @@ public class ForwardAndTurnAuto extends LinearOpMode {
         while (opModeIsActive()) {
             int leftMoved  = drive.leftTicks()  - leftStart;
             int rightMoved = drive.rightTicks() - rightStart;
+            long elapsed   = System.currentTimeMillis() - begin;
+
+            // A side that was asked to move but has not counted a single tick after
+            // the grace period has a cable problem, not a slow robot. Check each side
+            // on its own: one missing cable lets the other side run on, so the robot
+            // curves (straight move) or spins until the timeout (turn) -- a runaway
+            // either way. No amount of driving will satisfy a dead encoder.
+            boolean leftDead  = leftDelta  != 0 && leftMoved  == 0;
+            boolean rightDead = rightDelta != 0 && rightMoved == 0;
+            boolean encodersDead = elapsed > ENCODER_STARTUP_GRACE_MS
+                                && (leftDead || rightDead);
 
             telemetry.addData("move", label);
-            telemetry.addData("  left",  "%d / %d ticks", leftMoved,  leftDelta);
-            telemetry.addData("  right", "%d / %d ticks", rightMoved, rightDelta);
-            telemetry.addData("  elapsed", "%d ms", System.currentTimeMillis() - begin);
+            telemetry.addData("  left",  "%d / %d ticks%s", leftMoved,  leftDelta,
+                    leftDead ? "   <-- no encoder reading" : "");
+            telemetry.addData("  right", "%d / %d ticks%s", rightMoved, rightDelta,
+                    rightDead ? "   <-- no encoder reading" : "");
+            telemetry.addData("  elapsed", "%d ms", elapsed);
+            if (encodersDead) {
+                telemetry.addLine("drive encoders not reading -- check the cables");
+            }
             telemetry.update();
+
+            if (encodersDead) {
+                drive.stop();
+                settle();
+                return "STOPPED: " + (leftDead && rightDead ? "both"
+                        : leftDead ? "left" : "right")
+                        + " drive encoder not reading -- check the cables";
+            }
 
             boolean arrived = Math.abs(leftDelta  - leftMoved)  <= TOLERANCE_TICKS
                            && Math.abs(rightDelta - rightMoved) <= TOLERANCE_TICKS;
             if (arrived) {
                 drive.stop();
                 settle();
-                return true;
+                return REACHED;
             }
-            if (System.currentTimeMillis() - begin > timeoutMs) {
+            if (elapsed > timeoutMs) {
                 drive.stop();
                 settle();
-                return false;
+                return "TIMED OUT -- check geometry";
             }
             idle();
         }
 
         drive.stop();
-        return false;
+        return "stopped";
     }
 
     /** Let the wheels actually come to rest before we read position or start again. */
