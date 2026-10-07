@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -38,7 +37,6 @@ import com.qualcomm.robotcore.hardware.DcMotor;
  *    the 19.2:1 gearbox -- not the 5.23:1 its comment claims. Measure and use what
  *    the robot actually has.
  */
-@Disabled
 @TeleOp(name = "9. Drive Encoder Measure", group = "Bringup")
 public class DriveEncoderMeasureOpMode extends LinearOpMode {
 
