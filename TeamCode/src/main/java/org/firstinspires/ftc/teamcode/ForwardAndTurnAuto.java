@@ -17,20 +17,21 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * ---------------------------------------------------------------------------
  * THE THREE CONSTANTS THAT DECIDE WHETHER THIS LANDS WHERE YOU AIMED
  *
- * Dead reckoning multiplies errors, so these are the whole story. The defaults are
- * the stock goBILDA figures and are a starting point, not a measurement -- confirm
- * each one before trusting a score:
+ * Dead reckoning multiplies errors, so these are the whole story. All three were
+ * measured on this robot (2026-10-07); re-measure if the drive changes:
  *
  *   TICKS_PER_WHEEL_REV  the motor's encoder counts per OUTPUT-shaft revolution.
- *                        Read it off the goBILDA product page for your motor/gearbox
- *                        (a 5203 Yellow Jacket at 5.23:1 is 537.7). Getting this
- *                        wrong scales every distance and angle by the same factor.
- *   WHEEL_DIAMETER_IN    the driven wheel's real diameter, tape-measured. A 96 mm
- *                        goBILDA wheel is nominally 3.78 in, often quoted as "4".
+ *                        537.7 = 28 counts per motor turn x the 19.2:1 gearbox.
+ *                        Measured by hand as 2683 ticks over 5 wheel turns = 536.6.
+ *                        Getting this wrong scales every distance and angle by the
+ *                        same factor.
+ *   WHEEL_DIAMETER_IN    the driven wheel's real diameter, tape-measured at 3.75 in.
+ *                        (The 96 mm goBILDA wheel is nominally 3.78 in, often
+ *                        quoted as "4".)
  *   TRACK_WIDTH_IN       the distance between the centres of the left and right
- *                        wheels. Measure it; it is what turns wheel travel into a
- *                        rotation angle. Wrong track width is why a "72 degree"
- *                        turn comes out as 65 or 80.
+ *                        wheels, tape-measured at 15.75 in. It is what turns wheel
+ *                        travel into a rotation angle. Wrong track width is why a
+ *                        "72 degree" turn comes out as 65 or 80.
  *
  * Calibrate fast: put the robot on the floor, mark the wheels, push it exactly one
  * tile, and compare the encoder ticks you read against TILE_IN * ticks-per-inch.
@@ -71,14 +72,18 @@ public class ForwardAndTurnAuto extends LinearOpMode {
 
     // --- Robot geometry: MEASURE THESE, do not assume them ------------------
 
-    /** Encoder counts per output-shaft revolution. 537.7 is a 5203 at 5.23:1. */
+    /**
+     * Encoder counts per output-shaft revolution. 537.7 = 28 counts per motor turn
+     * x the 19.2:1 gearbox (measured by hand: 2683 ticks over 5 wheel turns). The
+     * old comment here said 5.23:1, which would be ~145, not 537.7.
+     */
     public static final double TICKS_PER_WHEEL_REV = 537.7;
 
-    /** Driven wheel diameter in inches. Confirm with a tape, not the spec sheet. */
-    public static final double WHEEL_DIAMETER_IN = 4.0;
+    /** Driven wheel diameter in inches, tape-measured across the tread. */
+    public static final double WHEEL_DIAMETER_IN = 3.75;
 
-    /** Centre-to-centre distance between the left and right wheels, in inches. */
-    public static final double TRACK_WIDTH_IN = 12.0;
+    /** Centre-to-centre distance between the left and right wheels, tape-measured. */
+    public static final double TRACK_WIDTH_IN = 15.75;
 
     // --- Motion -------------------------------------------------------------
 

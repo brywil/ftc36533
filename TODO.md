@@ -53,21 +53,19 @@ from the list in the same commit as any fix.
 
 ---
 
-## 3. Measure the three numbers Autonomous depends on
+## 3. Measure the three numbers Autonomous depends on — MEASURED, CODE UPDATED, NOT YET VERIFIED ON THE FLOOR
 
-In `ForwardAndTurnAuto.java`, two constants disagree with their own comments:
+Measured 2026-10-07 and written into `ForwardAndTurnAuto.java`:
 
-- `TICKS_PER_WHEEL_REV = 537.7`. The comment says that's a 5203 motor at 5.23:1, but
-  goBILDA motors give 28 counts per motor turn, and 537.7 ÷ 28 = 19.2 — so 537.7 is the
-  **19.2:1** gearbox. Look at the label on your drive motors and use the right number
-  (goBILDA's product page lists it). If the robot has the 5.2:1 gearbox, every distance is
-  about 3.7× off.
-- `WHEEL_DIAMETER_IN = 4.0`, but the comment says the wheel is 3.78 in. Measure your
-  wheels with a tape.
-- `TRACK_WIDTH_IN = 12.0` — measure it too (centre of left wheel to centre of right).
+- `TICKS_PER_WHEEL_REV = 537.7` is **correct** — it is the **19.2:1** gearbox
+  (28 counts/motor-turn x 19.2), not the 5.23:1 the old comment claimed. Confirmed by
+  hand: 2683 ticks over 5 wheel turns = 536.6. Only the comment was wrong; it is fixed.
+- `WHEEL_DIAMETER_IN = 3.75` (tape across the tread; was 4.0).
+- `TRACK_WIDTH_IN = 15.75` (centre of left wheel to centre of right; was 12.0).
 
-**How to check.** The file's header explains the one-tile push test: push the robot
-exactly one tile and compare the encoder count with what the code expects.
+**STILL TO DO — verify on the floor.** The file's header explains the one-tile push test:
+push the robot exactly one tile and compare the encoder count with what the code expects.
+Do that (and the on-blocks auto run) before trusting a score, then delete this item.
 
 ---
 
