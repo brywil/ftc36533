@@ -4,15 +4,25 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /**
- * The simplest useful Autonomous: drive two floor tiles forward, then spin 72
- * degrees clockwise. Both moves are dead-reckoned from the drive motors' encoders
- * -- there is no IMU on the kitbot, so a heading cannot be measured directly, only
- * inferred from how far each side has rolled.
+ * The simplest useful Autonomous: drive two floor tiles forward, spin 90 degrees
+ * clockwise while the launcher spins up, then feed for a few seconds. The two moves
+ * are dead-reckoned from the drive motors' encoders -- there is no IMU on the kitbot,
+ * so a heading cannot be measured directly, only inferred from how far each side has
+ * rolled.
  *
  * WHICH ROBOT: the goBILDA StarterBot / kitbot (two motors, left_drive and
  * right_drive). It uses {@link TankDrivebase} for both its direction constants and
  * its encoder frame, so a side that drives forward in TeleOp also drives forward
  * here. The practice bot (mecanum) should get its own version that can use the IMU.
+ *
+ * THE SHOOTING SEQUENCE, and why it is ordered the way it is:
+ *   1. the launcher is told to spin up BEFORE the turn, so the turn time is spent
+ *      getting the wheel to speed rather than waiting idle;
+ *   2. after the turn, a short pause lets the chassis settle before anything is fed
+ *      (feeding a still-rocking robot throws the ball off-line);
+ *   3. the windmill then runs for FEED_DURATION_MS, pushing balls into the wheel.
+ * The launcher is velocity-controlled (see {@link Shooter}), so once set it holds its
+ * speed on its own -- nothing here has to keep updating it during the turn.
  *
  * ---------------------------------------------------------------------------
  * THE THREE CONSTANTS THAT DECIDE WHETHER THIS LANDS WHERE YOU AIMED
@@ -46,7 +56,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * side's encoder stops counting altogether, the move is stopped early instead of
  * waiting out the timeout, because no amount of driving will ever "arrive".
  */
-@Autonomous(name = "8. Auto: 2 Squares Forward, Turn 72", group = "Auto")
+@Autonomous(name = "8. Auto: 2 Squares, Turn 90, Launch", group = "Auto")
 public class ForwardAndTurnAuto extends LinearOpMode {
 
     // --- Field geometry -----------------------------------------------------
@@ -61,7 +71,7 @@ public class ForwardAndTurnAuto extends LinearOpMode {
     public static final double TILE_IN = 24.0;
 
     /** How far to spin, in degrees, clockwise seen from above. */
-    public static final double TURN_DEG = 72.0;
+    public static final double TURN_DEG = 90.0;
 
     /**
      * Which way a positive turn target spins the robot. +1 is clockwise, matching
@@ -69,6 +79,14 @@ public class ForwardAndTurnAuto extends LinearOpMode {
      * spins the wrong way -- confirm it on blocks before trusting it.
      */
     public static final double TURN_SIGN = 1.0;
+
+    /**
+     * Which way positive ticks drive the robot. +1 is "forward" as the drivebase
+     * defines it (the same way the left stick drives it in TeleOp). This Autonomous
+     * drives the OTHER way from the stick, so it is -1 here. Flip to +1 if the robot
+     * sets off the wrong way. This affects Autonomous only -- TeleOp is untouched.
+     */
+    public static final double FORWARD_SIGN = -1.0;
 
     // --- Robot geometry: MEASURE THESE, do not assume them ------------------
 
@@ -100,6 +118,38 @@ public class ForwardAndTurnAuto extends LinearOpMode {
     public static final long FORWARD_TIMEOUT_MS = 8000;
     public static final long TURN_TIMEOUT_MS = 5000;
 
+    // --- Shooting sequence --------------------------------------------------
+
+    /**
+     * Launcher wheel speed for the shot, in encoder ticks per second. This is the
+     * SAME kind of number the distance->speed table holds. 1300 is a little above
+     * goBILDA's 1250 baseline: enough to throw the ball farther without pushing the
+     * wheel past what it can hold. Tune in steps and watch the shot, not the number.
+     *
+     * WATCH OUT: this is a closed-loop target. If the wheel cannot actually reach it
+     * (weak battery, or too high a value), the spin-up wait below times out and the
+     * telemetry says "launcher at speed: NO" -- that means the speed is above what the
+     * motor can hold, not that the code is broken.
+     */
+    public static final double LAUNCH_VELOCITY = 1300.0;
+
+    /** Let the chassis stop rocking after the turn before feeding, so the shot is straight. */
+    public static final long SETTLE_AFTER_TURN_MS = 500;
+
+    /**
+     * After the turn, wait for the launcher to REPORT that it is at speed before
+     * feeding -- up to this long. The launcher has an encoder, so "at speed" is a real
+     * measurement, not a guess; the spin-up started before the turn, so the turn time
+     * is usually enough. This cap only matters if the wheel never gets there (a weak
+     * battery, or a bad encoder cable), in which case we stop waiting rather than
+     * hang -- but see the telemetry: a timeout means the wheel was NOT ready and the
+     * shot was thrown short.
+     */
+    public static final long SPIN_UP_MAX_WAIT_MS = 3000;
+
+    /** How long to run the windmill, pushing balls into the wheel. */
+    public static final long FEED_DURATION_MS = 8000;
+
     /**
      * If neither side's encoder has counted a tick by this long into a move, treat
      * the encoders as dead (usually an unplugged cable or the wrong port) and stop.
@@ -111,10 +161,12 @@ public class ForwardAndTurnAuto extends LinearOpMode {
     private static final String REACHED = "reached";
 
     private TankDrivebase drive;
+    private Shooter shooter;
 
     @Override
     public void runOpMode() {
         drive = new TankDrivebase(hardwareMap);
+        shooter = new Shooter(hardwareMap);
 
         // Convert inches and degrees into wheel ticks once, so the rest of the
         // OpMode reads as the two moves the request actually asked for.
@@ -127,12 +179,14 @@ public class ForwardAndTurnAuto extends LinearOpMode {
         int turnTicks = (int) Math.round(
                 (TURN_DEG / 360.0) * Math.PI * TRACK_WIDTH_IN * ticksPerInch);
 
-        telemetry.addLine("Auto: 2 squares forward, then turn 72 deg clockwise.");
+        telemetry.addLine("Auto: 2 squares forward, turn 90 deg, then launch.");
         telemetry.addLine("WHEELS OFF THE GROUND for the first run.");
         telemetry.addLine();
         telemetry.addData("forward", "%d ticks (%.1f in)",
                 forwardTicks, SQUARES * TILE_IN);
         telemetry.addData("turn", "%d ticks (%.0f deg)", turnTicks, TURN_DEG);
+        telemetry.addData("launcher", shooter.hasLauncher() ? "OK" : "MISSING");
+        telemetry.addData("windmill", shooter.hasWindmill() ? "OK" : "MISSING");
         telemetry.addLine();
         telemetry.addLine("If these are wrong, the geometry constants at the");
         telemetry.addLine("top of ForwardAndTurnAuto.java need measuring.");
@@ -142,7 +196,13 @@ public class ForwardAndTurnAuto extends LinearOpMode {
         if (isStopRequested()) return;
 
         String forwardResult = runMove("forward " + format(SQUARES) + " squares",
-                forwardTicks, forwardTicks, DRIVE_POWER, FORWARD_TIMEOUT_MS);
+                (int) (FORWARD_SIGN * forwardTicks), (int) (FORWARD_SIGN * forwardTicks),
+                DRIVE_POWER, FORWARD_TIMEOUT_MS);
+
+        // Spin the launcher up BEFORE the turn, so the turn is spent getting the
+        // wheel to speed instead of waiting idle. The wheel is velocity-controlled, so
+        // this one call is enough -- it holds the speed on its own through the turn.
+        shooter.setVelocity(LAUNCH_VELOCITY);
 
         // A clockwise spin is left side forward, right side backward. driveToTicks
         // takes the direction from the sign of each target, not from the power.
@@ -152,8 +212,41 @@ public class ForwardAndTurnAuto extends LinearOpMode {
 
         drive.stop();
 
+        // Let the chassis settle, then WAIT for the wheel to actually report at speed
+        // before feeding. The old code waited a fixed 500 ms and fed regardless, which
+        // is why shots came out short when the wheel had not finished spinning up. The
+        // launcher has an encoder, so isSpunUp() is a real measurement -- poll it until
+        // it is true, capped so a never-spinning wheel does not hang the OpMode.
+        sleep(SETTLE_AFTER_TURN_MS);
+
+        long spinupBegin = System.currentTimeMillis();
+        boolean ready = false;
+        while (opModeIsActive()) {
+            ready = shooter.isSpunUp();
+            long waited = System.currentTimeMillis() - spinupBegin;
+            telemetry.addData("spinning up launcher", "%.0f / %.0f ticks/s  (%d ms)",
+                    shooter.getVelocity(), shooter.getCommandedVelocity(), waited);
+            telemetry.update();
+            if (ready || waited >= SPIN_UP_MAX_WAIT_MS) break;
+            idle();
+        }
+
+        telemetry.addData("launcher at speed", ready
+                ? "yes" : "NO -- timed out, check battery / encoder cable");
+        telemetry.update();
+
+        // Feed. The windmill runs for a fixed time; it pushes whatever is in the
+        // hopper into the spinning wheel.
+        shooter.setFeed(1.0);
+        sleep(FEED_DURATION_MS);
+        shooter.setFeed(0.0);
+
+        shooter.stop();
+        drive.stop();
+
         telemetry.addData("forward", forwardResult);
         telemetry.addData("turn", turnResult);
+        telemetry.addData("launch", ready ? "fired" : "wheel never reached speed");
         telemetry.addLine();
         telemetry.addLine("Done. If a move timed out, the robot may be stuck or the");
         telemetry.addLine("ticks-per-inch is too low -- see the header of this file.");
