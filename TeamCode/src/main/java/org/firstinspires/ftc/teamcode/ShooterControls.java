@@ -69,6 +69,9 @@ public class ShooterControls {
 
     public double getManualVelocity() { return manualVelocity; }
 
+    /** Set the MANUAL speed directly -- e.g. Autonomous pinning a known-good value. */
+    public void setManualVelocity(double velocity) { manualVelocity = Math.max(0.0, velocity); }
+
     public void nudgeManualVelocity(double delta) {
         manualVelocity = Math.max(0.0, manualVelocity + delta);
     }

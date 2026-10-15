@@ -1,7 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.limelightvision.LLStatus;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -28,7 +27,6 @@ import java.util.Locale;
  *   X  reset the observed tilt range
  *   Y  reset the TIP counter
  */
-@Disabled
 @TeleOp(name = "4. HIVE Bench (Limelight)", group = "Bringup")
 public class LimelightHiveBenchOpMode extends LinearOpMode {
 

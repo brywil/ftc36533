@@ -41,6 +41,14 @@ public class TankDrivebase {
 
     private final DcMotor left, right;
 
+    /**
+     * True while the motors are in RUN_TO_POSITION from {@link #driveToTicks}. In that
+     * mode a plain setPower() means "drive to the old target", not "drive at this
+     * power", so {@link #setPowers} has to switch back to open loop first -- otherwise
+     * a stick-style move after an encoder move silently does nothing.
+     */
+    private boolean positionMode = false;
+
     public TankDrivebase(HardwareMap hardwareMap) {
         left  = hardwareMap.get(DcMotor.class, LEFT_MOTOR);
         right = hardwareMap.get(DcMotor.class, RIGHT_MOTOR);
@@ -88,6 +96,13 @@ public class TankDrivebase {
     }
 
     public void setPowers(double l, double r) {
+        if (positionMode) {
+            // Leaving a driveToTicks move: back to plain open-loop power, or these
+            // setPower() calls below would just aim at the last position target.
+            left.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            right.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            positionMode = false;
+        }
         left.setPower(l);
         right.setPower(r);
     }
@@ -116,6 +131,7 @@ public class TankDrivebase {
         right.setTargetPosition(rightTarget);
         left.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         right.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+        positionMode = true;
         left.setPower(Math.abs(power));
         right.setPower(Math.abs(power));
     }

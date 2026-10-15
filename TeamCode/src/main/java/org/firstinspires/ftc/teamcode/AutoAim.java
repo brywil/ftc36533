@@ -61,19 +61,29 @@ public class AutoAim {
     /**
      * Least turn power that still moves the robot. Below this, the wheels stall
      * against friction and nothing happens, so a small error would never be fixed.
-     * Keep it small enough that it does not overshoot from the edge of the deadband.
+     * Keep it SMALL: this is a floor on every correction, so too large a value makes
+     * the smallest step wider than the deadband and the robot dithers around center
+     * instead of stopping. Lowered from 0.06 after that dither was seen on the kitbot.
      */
-    public static final double MIN_TURN = 0.06;
+    public static final double MIN_TURN = 0.03;
 
     /**
      * How close counts as aimed, in degrees. The camera's own angle noise is a few
      * tenths of a degree, so this must be comfortably larger or the robot can never
-     * be "settled".
+     * be "settled". It should also be at least as wide as the smallest turn step, so
+     * the robot can stop INSIDE it rather than stepping over it. Raised from 1.5.
      */
-    public static final double DEADBAND_DEG = 1.5;
+    public static final double DEADBAND_DEG = 2.5;
 
     /** How long the bearing must stay inside the deadband before "settled" is true. */
     public static final long SETTLE_MS = 250;
+
+    /**
+     * Maximum number of turn direction changes allowed before giving up and
+     * declaring "settled". Prevents dithering when MIN_TURN is too large for
+     * the deadband. Set to 0 to disable.
+     */
+    public static final int MAX_DIRECTION_CHANGES = 6;
 
     /**
      * A fixed angle offset added to the aim, in degrees. Non-zero if the shooter
@@ -105,6 +115,8 @@ public class AutoAim {
     private double lastTurnError = 0.0;
     private long lastMs = 0L;
     private long centeredSinceMs = -1L;
+    private int directionChanges = 0;
+    private double lastTurnSign = 0.0;
 
     /** Forget all history. Call when enabling aim, so an old error cannot bias the first turn. */
     public void reset() {
@@ -112,6 +124,8 @@ public class AutoAim {
         lastTurnError = 0.0;
         lastMs = 0L;
         centeredSinceMs = -1L;
+        directionChanges = 0;
+        lastTurnSign = 0.0;
     }
 
     /**
@@ -150,11 +164,23 @@ public class AutoAim {
         }
 
         double limited = clamp(raw, MIN_TURN, MAX_TURN, turnError);
+
+        double currentTurnSign = Math.signum(limited);
+        if (lastTurnSign != 0.0 && currentTurnSign != 0.0 && currentTurnSign != lastTurnSign) {
+            directionChanges++;
+        }
+        lastTurnSign = currentTurnSign;
+
+        boolean settled = false;
+        if (MAX_DIRECTION_CHANGES > 0 && directionChanges >= MAX_DIRECTION_CHANGES) {
+            settled = true;
+        }
+
         haveLast = true;
         lastTurnError = turnError;
         lastMs = nowMs;
 
-        return new Aim(limited, true, false, bearingDeg);
+        return new Aim(limited, true, settled, bearingDeg);
     }
 
     /**
@@ -166,7 +192,6 @@ public class AutoAim {
         double mag = Math.abs(v);
         if (mag > max) mag = max;
         if (mag < min) mag = min;
-        if (mag > max) mag = max;
         return Math.copySign(mag, signOf);
     }
 }
