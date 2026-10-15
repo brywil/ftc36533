@@ -350,9 +350,12 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
             // reversals on sign flips) rarely happens -- same-side jumping never
             // flips sign so the reversal counter stays at 0. Gate on the wider
             // window instead. Still requires the wheel at speed.
+            // LATCHED: once feeding starts it keeps going (aim keeps correcting
+            // the turn the whole time) so a jumping bearing can't stutter the
+            // windmill. The wheel still has to be at speed.
             boolean aimed = command.hasTarget
                     && Math.abs(command.bearingDeg) <= FIRE_TOLERANCE_DEG;
-            boolean fire = aimed && shooter.isSpunUp();
+            boolean fire = (feedStart != 0L || aimed) && shooter.isSpunUp();
             shooter.requestFeed(fire, false);   // gated on spin-up inside ShooterControls
             if (aimed) everAimed = true;
 
