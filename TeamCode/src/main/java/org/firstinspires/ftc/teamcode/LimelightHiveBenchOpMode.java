@@ -4,8 +4,10 @@ import com.qualcomm.hardware.limelightvision.LLStatus;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * Bench bring-up for reading the BIOBUZZ HIVE off the Limelight 3A.
@@ -20,6 +22,12 @@ import java.util.Locale;
  * turn on 3D. The 3D solve is what fills in the camera-space pose this needs for
  * tilt and height; without it you still get IDs and angles, but every observation
  * will read "no 3D pose" and be rejected.
+ *
+ * The first telemetry line is the ACTIVE pipeline -- index and type. If it does not
+ * read "pipe_fiducial", nothing will ever be detected, which is the most common reason
+ * this OpMode shows no tags at all. Below that, a grid lists every BIOBUZZ AprilTag ID
+ * (30-45) whether it was seen or not, so a tag that is missing is obvious rather than
+ * merely absent from a list.
  *
  * Controls:
  *   A  capture the current tilt as the LOW endpoint
@@ -65,8 +73,31 @@ public class LimelightHiveBenchOpMode extends LinearOpMode {
             telemetry.addData("pipeline", "%d %s", status.getPipelineIndex(), status.getPipelineType());
             telemetry.addData("fps", "%.0f", status.getFps());
 
-            // --- raw recognition: everything seen, HIVE tag or not ---
+            // --- BIOBUZZ tag grid: all 16 tags (30-45) at a glance ---
+            // A tag that was not seen is simply absent from the list below, which
+            // is easy to miss; this shows every ID whether it was seen or not, so
+            // "30 and 31 are missing" is obvious. Section 9.9: four CELL clusters
+            // of four tags each.
             List<LimelightHiveTracker.Tag> tags = tracker.recognize();
+            Set<Integer> seenIds = new HashSet<>();
+            for (LimelightHiveTracker.Tag t : tags) seenIds.add(t.id);
+
+            telemetry.addLine("BIOBUZZ tags  (+ seen, . not seen)");
+            int idSeen = 0;
+            for (HiveGeometry.Cell cell : HiveGeometry.Cell.values()) {
+                StringBuilder row = new StringBuilder(String.format(Locale.US, "%-13s",
+                        cell.clusterName));
+                for (int id : cell.memberIds()) {
+                    boolean has = seenIds.contains(id);
+                    if (has) idSeen++;
+                    row.append(String.format(Locale.US, " %2d%s", id, has ? "+" : "."));
+                }
+                telemetry.addLine(row.toString());
+            }
+            telemetry.addData("ids seen", "%d / %d", idSeen,
+                    HiveGeometry.Cell.values().length * HiveGeometry.CLUSTER_MEMBER_COUNT);
+
+            // --- raw recognition: everything seen, HIVE tag or not ---
             if (tags.isEmpty()) {
                 telemetry.addLine("\nNo AprilTags in view.");
             }
