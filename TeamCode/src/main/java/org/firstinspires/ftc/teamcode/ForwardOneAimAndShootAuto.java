@@ -349,17 +349,22 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
             // members blink, so AutoAim's strict settled (centered 250 ms, or 6
             // reversals on sign flips) rarely happens -- same-side jumping never
             // flips sign so the reversal counter stays at 0. Gate on the wider
-            // window instead. Still requires the wheel at speed.
-            // LATCHED: once feeding starts it keeps going (aim keeps correcting
-            // the turn the whole time) so a jumping bearing can't stutter the
-            // windmill. The wheel still has to be at speed.
+            // window instead.
+            // LATCHED, and the spin-up test is left to ShooterControls, which owns the
+            // feed gate: it starts a feed only on a wheel measured at speed and then
+            // holds that feed open. Testing isSpunUp() HERE as well made the two gates
+            // fight -- the wheel dips under a ball's load, this one withdraws the
+            // request, and the windmill stutters. Ask once, keep asking, and let one
+            // place decide.
             boolean aimed = command.hasTarget
                     && Math.abs(command.bearingDeg) <= FIRE_TOLERANCE_DEG;
-            boolean fire = (feedStart != 0L || aimed) && shooter.isSpunUp();
-            shooter.requestFeed(fire, false);   // gated on spin-up inside ShooterControls
+            boolean wantFeed = aimed || feedStart != 0L;
+            shooter.requestFeed(wantFeed, false);
             if (aimed) everAimed = true;
 
-            if (fire && feedStart == 0L) feedStart = now;
+            // Latch off what the feed actually DID, not what was asked for, so the timer
+            // starts with the first ball rather than with the first request.
+            if (shooter.getFeedPower() > 0 && feedStart == 0L) feedStart = now;
 
             // --- telemetry: what the aim loop and the wheel are doing ---
             telemetry.addData("tag", tags.isEmpty() ? "none in view"

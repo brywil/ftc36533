@@ -117,13 +117,27 @@ public class ShooterControls {
     // --- feed ---------------------------------------------------------------
 
     /**
-     * Request a feed. Forward is gated on the measured spin-up, so a cold wheel never
-     * gets a ball; reverse (clearing a jam) always works.
+     * Request a feed. Forward only STARTS on a wheel that is measured up to speed, so
+     * a cold wheel never gets a ball; reverse (clearing a jam) always works.
+     *
+     * ONCE STARTED, KEEP GOING -- until the wheel collapses below MIN_LAUNCH_VELOCITY.
+     * Pushing a ball in always slows the wheel for a moment, and shutting the feed on
+     * that dip made the windmill stutter: ball in, wheel drops under the spin-up line,
+     * feed shuts, wheel speeds back up, feed opens, next ball -- a cycle about once a
+     * second, which looks like the windmill twitching and the wheel changing speed.
+     * The power already sent (feedPower) is what tells us a feed is under way.
      */
     public void requestFeed(boolean feed, boolean reverse) {
         double p = 0.0;
-        if (feed && isSpunUp()) p = 1.0;
-        else if (reverse) p = -1.0;
+        if (reverse) {
+            p = -1.0;   // reverse wins over a feed: that is what a jam deserves
+        } else if (feed) {
+            boolean running = feedPower > 0;
+            boolean fastEnough = running
+                    ? shooter.getVelocity() >= Shooter.MIN_LAUNCH_VELOCITY
+                    : isSpunUp();
+            p = fastEnough ? 1.0 : 0.0;
+        }
         feedPower = p;
         shooter.setFeed(p);
     }
