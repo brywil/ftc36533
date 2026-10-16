@@ -30,8 +30,12 @@ package org.firstinspires.ftc.teamcode;
  */
 public class ShooterControls {
 
-    /** Starting manual velocity, and the step the tune buttons move it by. */
-    public static final double DEFAULT_MANUAL_VELOCITY = 1250.0;   // goBILDA's launch value
+    /**
+     * Starting manual velocity, and the step the tune buttons move it by. 1300 is what
+     * "2. Tank TeleOp" was tuned to on 2026-10-15 -- shots landed there and the wheel
+     * measured at speed -- so the driver starts where it was tuned rather than 50 low.
+     */
+    public static final double DEFAULT_MANUAL_VELOCITY = 1300.0;
     public static final double MANUAL_STEP = 25.0;
 
     private final Shooter shooter;

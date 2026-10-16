@@ -65,17 +65,23 @@ public class Shooter {
 
     /**
      * Measured points, nearest first. Each pair is {distance in inches, launcher
-     * velocity in ticks per second}. REPLACE with what ShooterCalibrateOpMode prints --
-     * these are placeholders that only make the interpolation runnable. goBILDA's own
-     * example uses 1250 ticks/s as a full launch; the spread here is plausible, not
-     * measured.
+     * velocity in ticks per second}.
+     *
+     * ONE POINT SO FAR. 1300 ticks/s was found by hand in "2. Tank TeleOp" on
+     * 2026-10-15: dpad-up until the shots landed, with the wheel measured holding
+     * what it was asked for. The table is deliberately FLAT at that value for every
+     * distance -- one speed known to land beats four invented ones, and it never asks
+     * for LESS than the wheel is known to need. The cost is that the camera's range
+     * does not change the shot yet: there is only one speed to give.
+     *
+     * TO MAKE IT A REAL CURVE: find the speed that lands from a distance you have not
+     * tuned at, and add the row. Two rows make rangeToVelocity() interpolate between
+     * them, which is the whole point of the Limelight shooting OpModes.
      */
     public static final double[][] RANGE_VELOCITY_TABLE = {
             // { inches, ticks per second }
-            { 24.0, 1000.0 },
-            { 48.0, 1150.0 },
-            { 72.0, 1300.0 },
-            { 96.0, 1450.0 },
+            { 24.0, 1300.0 },   // measured: this is where the shots land
+            { 96.0, 1300.0 },   // NOT measured -- flat until a far point is added
     };
 
     /** Fewer measured points than this and rangeToVelocity() refuses to answer. */

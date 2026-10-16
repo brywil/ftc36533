@@ -29,11 +29,11 @@ import java.util.Locale;
  * mecanum practice bot would need its own version (and its own track width).
  *
  * ---------------------------------------------------------------------------
- * THIS SHOOTS WITH A PLACEHOLDER TABLE. Shooter.RANGE_VELOCITY_TABLE still holds
- * made-up rows (24 in -> 1000 ticks/s and up), so the speed is a guess. That is
- * deliberate here -- run it, see where the ball lands, and adjust the table from
- * what you see. A real calibration comes from "5. Shooter Calibrate". Until then
- * treat every shot as an experiment, not a score.
+ * THE SPEED IS ONE MEASURED VALUE, NOT A CURVE. Shooter.RANGE_VELOCITY_TABLE holds a
+ * single speed -- 1300 ticks/s, tuned by hand in "2. Tank TeleOp" on 2026-10-15 --
+ * used flat at every distance, so the camera's range does not change the shot yet.
+ * Find a speed for a second distance, add the row, and this becomes distance-aware.
+ * Until then treat a shot from an untuned distance as an experiment, not a score.
  * ---------------------------------------------------------------------------
  *
  * SAFETY:
@@ -182,10 +182,12 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
         telemetry.addData("limelight", tracker.hasLimelight() ? "OK" : "MISSING from config");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
-        telemetry.addData("table", Shooter.RANGE_VELOCITY_TABLE.length + " points (PLACEHOLDER -- not measured)");
+        telemetry.addData("table", Shooter.RANGE_VELOCITY_TABLE.length
+                + " points -- one speed (%.0f) for every distance",
+                Shooter.RANGE_VELOCITY_TABLE[0][1]);
         telemetry.addLine();
-        telemetry.addLine("Shots are an experiment until the table is calibrated in");
-        telemetry.addLine("Shooter.java -- adjust it from where the ball lands.");
+        telemetry.addLine("The speed is measured for one distance, not a curve yet.");
+        telemetry.addLine("Add a row for a second distance to make it distance-aware.");
         telemetry.update();
 
         waitForStart();

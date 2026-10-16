@@ -56,7 +56,7 @@ public class ShooterCalibrateOpMode extends LinearOpMode {
         // Recorded points, as {inches, ticks per second}. Sorted only when printed.
         List<double[]> points = new ArrayList<>();
 
-        double velocity = 1250.0;   // goBILDA's full-launch value, a good starting point
+        double velocity = ShooterControls.DEFAULT_MANUAL_VELOCITY;   // where the wheel is known to land
         boolean spinning = false;
 
         telemetry.addLine("Point the Limelight at an AprilTag on your target, then START.");
