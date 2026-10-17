@@ -19,9 +19,26 @@ package org.firstinspires.ftc.teamcode;
  * When the tag leaves the frame the bearing does not exist, and a controller that
  * keeps turning on the last angle it saw will spin to find a target that moved.
  * Worse, fast turning causes motion blur, which is often what loses the tag in the
- * first place, so turning harder to recover can make it worse. So: no bearing means
- * no turn, full stop. Recovery is the driver's job (or a future search mode), not
- * this class guessing.
+ * first place, so turning harder to recover can make it worse. So a lost target
+ * stops the turn. Recovery is the driver's job (or a future search mode), not this
+ * class guessing.
+ *
+ * BUT NOT INSTANTLY, because the camera BLINKS. On a frame where the detector finds
+ * nothing -- motion blur, one member of the cluster dropping out, the pipeline
+ * missing a deadline -- the bearing does not exist for that frame and comes back on
+ * the next one. Zeroing the turn for those frames means a turn that stops and starts
+ * ~20 times a second, and that is not a slow turn, it is a STUTTER. The driver
+ * reported exactly that: "it twitches to move instead of a more constant movement".
+ *
+ * The rest of this codebase already handles a blink this way and for the same
+ * reason -- ForwardOneAimAndShootAuto holds its RANGE through one so a broken frame
+ * cannot drop the wheel's speed to zero. The bearing had no such hold, which is the
+ * gap this closes.
+ *
+ * The difference from the spin-to-find failure above is that a coast CANNOT RENEW:
+ * the clock is never restarted by a coasting frame, so the turn always dies within
+ * COAST_MS of the last frame that actually saw a tag. A bounded coast is a blink
+ * tolerance; a search is unbounded, and this is not one.
  * ---------------------------------------------------------------------------
  *
  * TUNING, in the order to do it, on blocks with the wheels free:
@@ -45,8 +62,20 @@ public class AutoAim {
      */
     public static final double TURN_SIGN = 1.0;
 
-    /** Turn power per degree of error. The main tuning knob. */
-    public static final double KP = 0.020;
+    /**
+     * Turn power per degree of error. The main tuning knob.
+     *
+     * Raised from 0.020 for "make it aim a little faster". It brings the full MAX_TURN
+     * onto an error of ~10 deg instead of ~17, so the approach is brisker, and it
+     * roughly doubles what the robot is asked for at the edge of the deadband (0.088
+     * against 0.05) -- which is the part of the range where a skid-steer is scrubbing
+     * against carpet and a small command is simply not enough to break it loose.
+     *
+     * MAX_TURN is deliberately unchanged, so this does NOT raise the peak rotation
+     * rate and so costs no extra motion blur. If the robot now overshoots the tag and
+     * hunts around it, this is the number to bring back down; see the header's 1-2-3.
+     */
+    public static final double KP = 0.035;
 
     /** Damping. 0 is pure P; add a little only if it hunts around center. */
     public static final double KD = 0.0;
@@ -64,6 +93,11 @@ public class AutoAim {
      * Keep it SMALL: this is a floor on every correction, so too large a value makes
      * the smallest step wider than the deadband and the robot dithers around center
      * instead of stopping. Lowered from 0.06 after that dither was seen on the kitbot.
+     *
+     * At the current KP this floor barely binds -- it only applies within MIN_TURN/KP
+     * = 0.9 deg of the goal, which is inside DEADBAND_DEG, so the deadband always gets
+     * there first. What the robot is actually asked for near the goal is KP times the
+     * error, so tune THAT for a weak last few degrees, not this.
      */
     public static final double MIN_TURN = 0.03;
 
@@ -77,6 +111,19 @@ public class AutoAim {
 
     /** How long the bearing must stay inside the deadband before "settled" is true. */
     public static final long SETTLE_MS = 250;
+
+    /**
+     * How long a turn survives a target that has just gone missing, in milliseconds.
+     *
+     * Long enough to cover a dropped frame or two at the camera's frame rate -- and to
+     * match LimelightHiveTracker's own 200 ms staleness limit, so the two agree on what
+     * "the camera just blinked" means -- and short enough that it stays a blink
+     * tolerance rather than becoming a search. See the header.
+     *
+     * Set to 0 to have a missing target stop the turn immediately, which is what this
+     * did before and what makes the motion stutter.
+     */
+    public static final long COAST_MS = 180;
 
     /**
      * Maximum number of turn direction changes allowed before giving up and
@@ -96,23 +143,40 @@ public class AutoAim {
     public static final class Aim {
         /** Turn command, -1..1. Positive is clockwise, matching the drivebases. */
         public final double turn;
-        /** True when a tag with a usable bearing is in view. */
+        /**
+         * True when a tag with a usable bearing is in view THIS frame. Deliberately
+         * false while coasting: a caller that decides to shoot, or to give up and
+         * search, off this flag must not be told there is a target when there is not.
+         */
         public final boolean hasTarget;
         /** True when the bearing has stayed inside the deadband for SETTLE_MS. */
         public final boolean settled;
+        /**
+         * True when the target just went missing and this turn is the last one being
+         * carried through the gap (see COAST_MS). Never true at the same time as
+         * hasTarget, and the only case where a caller sees a non-zero turn with no
+         * target in view.
+         */
+        public final boolean coasting;
         /** The bearing used, in degrees; NaN when there was no target. */
         public final double bearingDeg;
 
-        Aim(double turn, boolean hasTarget, boolean settled, double bearingDeg) {
+        Aim(double turn, boolean hasTarget, boolean settled, boolean coasting,
+            double bearingDeg) {
             this.turn = turn;
             this.hasTarget = hasTarget;
             this.settled = settled;
+            this.coasting = coasting;
             this.bearingDeg = bearingDeg;
         }
     }
 
     private boolean haveLast = false;
     private double lastTurnError = 0.0;
+    /** The last turn sent, kept so a blink can be coasted through instead of zeroed. */
+    private double lastTurn = 0.0;
+    /** The bearing that turn was built from; reported, so a coast can be seen. */
+    private double lastBearingDeg = 0.0;
     private long lastMs = 0L;
     private long centeredSinceMs = -1L;
     private int directionChanges = 0;
@@ -122,6 +186,8 @@ public class AutoAim {
     public void reset() {
         haveLast = false;
         lastTurnError = 0.0;
+        lastTurn = 0.0;
+        lastBearingDeg = 0.0;
         lastMs = 0L;
         centeredSinceMs = -1L;
         directionChanges = 0;
@@ -134,10 +200,19 @@ public class AutoAim {
      */
     public Aim update(Double bearingDeg, long nowMs) {
         if (bearingDeg == null) {
-            // Lost the target: stop, drop history, refuse to claim settled.
+            // Target gone -- but a frame or two of that is the camera blinking, not the
+            // robot having lost the tag. Carry the last turn through a brief gap and
+            // then stop and drop history (see the header for why this is not a search).
+            //
+            // lastMs is deliberately NOT advanced here. The clock runs from the last
+            // frame that really saw a tag, so a coast cannot renew itself: the turn
+            // dies within COAST_MS no matter how long the target stays away.
+            if (COAST_MS > 0 && haveLast && (nowMs - lastMs) <= COAST_MS) {
+                return new Aim(lastTurn, false, false, true, lastBearingDeg);
+            }
             haveLast = false;
             centeredSinceMs = -1L;
-            return new Aim(0.0, false, false, Double.NaN);
+            return new Aim(0.0, false, false, false, Double.NaN);
         }
 
         double angleError = bearingDeg - AIM_OFFSET_DEG;   // degrees, + is target right
@@ -150,8 +225,10 @@ public class AutoAim {
             // the deadband does not see a huge, false rate of change.
             haveLast = true;
             lastTurnError = turnError;
+            lastTurn = 0.0;   // an aimed robot that blinks should coast to a STOP
+            lastBearingDeg = bearingDeg;
             lastMs = nowMs;
-            return new Aim(0.0, true, settled, bearingDeg);
+            return new Aim(0.0, true, settled, false, bearingDeg);
         }
         centeredSinceMs = -1L;
 
@@ -178,9 +255,11 @@ public class AutoAim {
 
         haveLast = true;
         lastTurnError = turnError;
+        lastTurn = limited;
+        lastBearingDeg = bearingDeg;
         lastMs = nowMs;
 
-        return new Aim(limited, true, settled, bearingDeg);
+        return new Aim(limited, true, settled, false, bearingDeg);
     }
 
     /**

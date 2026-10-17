@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
@@ -28,7 +27,6 @@ import java.util.Locale;
  * The moment aim is on, the driver's forward/slide still work; only turning is taken
  * over. Turn aim off and the robot is exactly as it was.
  */
-@Disabled
 @TeleOp(name = "7. Auto Aim (AprilTag)", group = "Drive")
 public class AutoAimOpMode extends LinearOpMode {
 
@@ -107,7 +105,7 @@ public class AutoAimOpMode extends LinearOpMode {
             AutoAim.Aim command = aimOn
                     ? aim.update(bearing, System.currentTimeMillis())
                     : new AutoAim.Aim(deadband(gamepad1.right_stick_x), bearing != null, false,
-                                      bearing == null ? Double.NaN : bearing);
+                                      false, bearing == null ? Double.NaN : bearing);
 
             // Manual override: B hands the turn axis back to the driver for a moment.
             double turn = gamepad1.b ? deadband(gamepad1.right_stick_x) : command.turn;
