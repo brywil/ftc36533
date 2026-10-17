@@ -78,6 +78,24 @@ at the wrong file. Linking on every build makes that impossible to hit, whether 
 the file, renamed it, or deleted it. You never need to re-run `install.sh` to pick up a
 source change.
 
+### On Windows
+
+`build.sh` is for Debian/Ubuntu. Windows cannot symlink without Developer Mode, so
+`deploy.ps1` **copies** the sources into the SDK clone instead — and the difference
+matters: a change is invisible to the build until that script runs. It also builds and
+installs on the Control Hub, and proves the install by comparing the APK on the hub with
+the one it just built.
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1               # copy + build + install
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -BuildOnly    # build only
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1 -InstallOnly  # push the last APK
+```
+
+`BUILD.md` has that in full, including the commands for a build with **no internet** (for
+a venue with no Wi-Fi), the timings to expect, and what each failure message actually
+means.
+
 ## The drivebase
 
 ### Two robots, two drivebases — pick one per robot
@@ -88,7 +106,7 @@ The code for both lives here; a robot uses whichever one its hardware matches.
 | robot | wheels | drivebase class | OpMode to run | config names |
 |---|---|---|---|---|
 | practice bot | mecanum (can slide) | `MecanumDrivebase` | `2. Mecanum TeleOp` | `front_left` etc. + `imu` |
-| kitbot | tank / skid-steer (goBILDA StarterBot) | `TankDrivebase` | `2. Tank TeleOp (kitbot)` | `left_drive` / `right_drive` |
+| kitbot | tank / skid-steer (goBILDA StarterBot) | `TankDrivebase` | `2a. Tank TeleOp (RED)` / `2b. (BLUE)` | `left_drive` / `right_drive` |
 
 The reason there are two pieces of code and not one setting: a mecanum base can move in
 directions it is not facing, so its math uses a **strafe** input and it can offer
@@ -143,7 +161,9 @@ left_intake_servo   right_intake_servo   windmill       CRServo
 limelight                                              Ethernet Device -> Limelight3A
 ```
 
-Then run `2. Tank TeleOp (kitbot)`. **No IMU is needed or used** — leave it out of the
+Then run `2a. Tank TeleOp (RED)` or `2b. Tank TeleOp (BLUE)` — the two are the same robot,
+and differ only in which goal the right bumper aims at, so pick the alliance you are on.
+**No IMU is needed or used** — leave it out of the
 configuration; the tank drivebase never looks for it.
 
 `left_drive` and `right_drive` are goBILDA's own names from their official StarterBot

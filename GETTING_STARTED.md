@@ -217,7 +217,9 @@ robot.
 Which OpMode you run depends on which robot you're on:
 
 - **Practice bot (mecanum):** `2. Mecanum TeleOp`. Needs all four motors **and** the IMU.
-- **Kitbot (tank):** `2. Tank TeleOp (kitbot)`. Needs just the two drive motors. No IMU.
+- **Kitbot (tank):** `2a. Tank TeleOp (RED)` or `2b. Tank TeleOp (BLUE)`. Needs just the two
+  drive motors. No IMU. The alliance decides which goal the right bumper aims at, so pick
+  the one you are actually on.
 
 They are deliberately controlled the same way, so you can go from one robot to the other
 without relearning anything:
