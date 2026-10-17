@@ -1,7 +1,6 @@
 # ftc36533
 
-FTC team 36533 robot code for **BIOBUZZ** (2026-27). Right now that is a four-motor
-mecanum drivebase and a Limelight 3A pipeline that finds POLLEN, but this repo is the
+FTC team 36533 robot code for **BIOBUZZ** (2026-27). Right now that is a tank drivebase and a Limelight 3A pipeline that finds POLLEN, but this repo is the
 general home for the team's code — new subsystems go here.
 
 **Open to-do items for the team are in [`TODO.md`](TODO.md)** — start there.
