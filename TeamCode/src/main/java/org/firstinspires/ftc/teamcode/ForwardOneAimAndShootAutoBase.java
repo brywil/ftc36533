@@ -41,7 +41,7 @@ import java.util.Locale;
  *
  * ---------------------------------------------------------------------------
  * THE SPEED IS ONE VALUE, NOT A CURVE -- AND NOT CURRENTLY A MEASURED ONE.
- * Shooter.RANGE_VELOCITY_TABLE holds a single speed, 1200 ticks/s since 2026-10-16
+ * Shooter.RANGE_VELOCITY_TABLE holds a single speed, 1275 ticks/s since 2026-10-16
  * (1300 was found to overshoot), used flat at every distance, so the camera's range
  * does not change the shot yet. Find a speed for a second distance, add the row, and
  * this becomes distance-aware. Until then treat a shot from an untuned distance as an

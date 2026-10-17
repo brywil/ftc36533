@@ -70,9 +70,11 @@ public class Shooter {
      * ONE POINT SO FAR, AND THE CURRENT VALUE IS NOT MEASURED. 1300 ticks/s was found
      * by hand in "2. Tank TeleOp" on 2026-10-15 -- dpad-up until the shots landed, with
      * the wheel measured holding what it was asked for -- and that number then
-     * OVERSHOT, so on 2026-10-16 it was dropped to 1200. 1200 is a guess: it moves in
-     * the 25 ticks/s unit the dpad tunes in, and lands clear of MIN_LAUNCH_VELOCITY
-     * below. Nobody has watched a ball land on it yet.
+     * OVERSHOT, so on 2026-10-16 it was dropped to 1275: one step of MANUAL_STEP, the
+     * unit the teleop dpad tunes in. 1275 is a guess. Nobody has watched a ball land on
+     * it, and one step is a small change -- range falls roughly with the SQUARE of the
+     * speed, so 2% off the wheel is nearer 4% off the distance. If the shots still
+     * overshoot, this is the number to keep walking down.
      *
      * REPLACE IT WITH THE NUMBER THAT LANDS. The dpad in "2. Tank TeleOp" moves the
      * speed 25 at a time; press it until shots land, read `asked ... ticks/s` off the
@@ -92,8 +94,8 @@ public class Shooter {
      */
     public static final double[][] RANGE_VELOCITY_TABLE = {
             // { inches, ticks per second }
-            { 24.0, 1200.0 },   // was 1300 (measured 2026-10-15); overshot -- 1200 unverified
-            { 96.0, 1200.0 },   // NOT measured -- flat until a far point is added
+            { 24.0, 1275.0 },   // was 1300 (measured 2026-10-15); overshot -- 1275 unverified
+            { 96.0, 1275.0 },   // NOT measured -- flat until a far point is added
     };
 
     /** Fewer measured points than this and rangeToVelocity() refuses to answer. */
