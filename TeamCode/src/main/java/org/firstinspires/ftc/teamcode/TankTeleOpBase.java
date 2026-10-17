@@ -83,6 +83,26 @@ public abstract class TankTeleOpBase extends LinearOpMode {
     private static final int FIDUCIAL_PIPELINE = 1;
 
     /**
+     * How many recent updates the cluster bearing is averaged over (a rolling window).
+     * At this loop's rate that spans a few camera frames.
+     *
+     * Averaging the members WITHIN one frame (see bearingToScoringCluster) cannot remove
+     * everything: which members the camera reports still changes frame to frame -- now
+     * two, now three -- so the frame's group mean still steps between values, and a turn
+     * command built from it steps with it. ForwardOneAimAndShootAuto hit the same thing
+     * and measured the jump at 0..7 deg; the window there is what stops the robot
+     * steering at whichever subset happened to be detected that frame. This is that
+     * window, for the same reason.
+     */
+    private static final int AIM_SMOOTH_FRAMES = 5;
+
+    /**
+     * Drop the window after this long with none of the cluster in view, so an angle from
+     * before the goal left the frame cannot bias the bearing re-acquired after it.
+     */
+    private static final long AIM_SMOOTH_RESET_MS = 400;
+
+    /**
      * OFF. RB aims, runs the intake, and fires -- and the fire is gated by the
      * launcher's spin-up measurement only, exactly as it was before aim existed.
      *
@@ -153,11 +173,12 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                 // Rising edge: an old error must not bias the first turn of a new press,
                 // and the fire gate re-arms for this press.
                 aim.reset();
+                clearAimSmoothing();   // same reason: no angle from before this press
                 aimedThisHold = false;
             }
             aimHeldPrev = aimHeld;
 
-            Double bearing = aimHeld ? bearingToScoringCluster(tracker) : null;
+            Double bearing = aimHeld ? bearingToScoringCluster(tracker, now) : null;
             AutoAim.Aim aimCommand = aimHeld
                     ? aim.update(bearing, now)
                     : new AutoAim.Aim(0.0, false, false, false, Double.NaN);
@@ -240,8 +261,9 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                     shooter.isSpunUp() ? "READY" : "spinning up");
             telemetry.addData("feed", shooter.feedState());
             telemetry.addData("aim", aimText(aimAvailable, aimHeld, bearing, aimCommand));
-            telemetry.addData("aim cluster", "%d of %d tags seen",
-                    lastClusterMembers, HiveGeometry.CLUSTER_MEMBER_COUNT);
+            telemetry.addData("aim cluster", "%d of %d tags   frame %s   smoothed %s",
+                    lastClusterMembers, HiveGeometry.CLUSTER_MEMBER_COUNT,
+                    deg(lastFrameBearingDeg), deg(bearing));
             telemetry.addData("fire gate", !REQUIRE_AIM_TO_FIRE ? "not gated on aim"
                     : !aimAvailable ? "open (no camera)"
                     : aimedThisHold ? "open (aimed this press)"
@@ -298,8 +320,17 @@ public abstract class TankTeleOpBase extends LinearOpMode {
      * of the goal", which is the thing worth aiming at anyway, and it cancels per-tag
      * solve noise besides -- the same reasoning LimelightHiveTracker.gate() uses when it
      * averages a cluster rather than trusting whichever member was detected first.
+     *
+     * AND NOT JUST THIS FRAME'S MEAN EITHER. Which members the camera reports changes
+     * frame to frame, so a mean over one frame still steps: two members give one answer,
+     * three give another, and the turn is built from whichever subset was seen. So the
+     * per-frame mean is passed through a short rolling window (AIM_SMOOTH_FRAMES) -- the
+     * same fix ForwardOneAimAndShootAuto applies for the same reason -- and the input
+     * becomes one continuous number instead of a sequence of jumps.
+     *
+     * @param now the loop's clock, so a long gap can be timed without a second read.
      */
-    private Double bearingToScoringCluster(LimelightHiveTracker tracker) {
+    private Double bearingToScoringCluster(LimelightHiveTracker tracker, long now) {
         HiveGeometry.Cell want = scoringCell();
         double sum = 0.0;
         int found = 0;
@@ -309,7 +340,31 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             found++;
         }
         lastClusterMembers = found;
-        return found == 0 ? null : sum / found;
+
+        if (found == 0) {
+            // None of the goal in view this frame. Report null and let AutoAim's own
+            // COAST_MS decide how long a gap may last -- but keep the window, so the next
+            // frame that DOES see the goal is still smoothed against the recent past.
+            // Only a gap that drags on drops it, because an angle from before the goal
+            // left the frame is worse than no smoothing at all.
+            lastFrameBearingDeg = null;
+            if (now - lastClusterFrameMs > AIM_SMOOTH_RESET_MS) clearAimSmoothing();
+            return null;
+        }
+
+        // This frame's own mean first, kept for telemetry, then the windowed answer.
+        // While the window is still filling this is a mean of what exists so far, so the
+        // very first frame after aim starts is that frame's own value -- no lag, and no
+        // old data to bias it.
+        lastFrameBearingDeg = sum / found;
+        bearingWin[bearingNext] = lastFrameBearingDeg;
+        bearingNext = (bearingNext + 1) % AIM_SMOOTH_FRAMES;
+        if (bearingCount < AIM_SMOOTH_FRAMES) bearingCount++;
+        lastClusterFrameMs = now;
+
+        double windowed = 0.0;
+        for (int i = 0; i < bearingCount; i++) windowed += bearingWin[i];
+        return windowed / bearingCount;
     }
 
     /**
@@ -318,6 +373,31 @@ public abstract class TankTeleOpBase extends LinearOpMode {
      * from the whole goal or from a single tag that happened to be detected.
      */
     private int lastClusterMembers = 0;
+
+    /**
+     * This frame's raw cluster mean, before smoothing -- the value that used to step
+     * straight into AutoAim. Null when the last frame saw none of the cluster. Shown
+     * only so the window's work is visible: if this jumps and the smoothed value does
+     * not, the window is doing its job.
+     */
+    private Double lastFrameBearingDeg = null;
+
+    /** The rolling window of recent cluster means, and how much of it is filled. */
+    private final double[] bearingWin = new double[AIM_SMOOTH_FRAMES];
+    private int bearingCount = 0, bearingNext = 0;
+
+    /** When the cluster was last actually seen, so a long gap can drop the window. */
+    private long lastClusterFrameMs = 0L;
+
+    /**
+     * Forget the rolling window. Called when aim starts, for the same reason AutoAim is
+     * reset then: an angle from before this press must not bias the first turn of it.
+     */
+    private void clearAimSmoothing() {
+        bearingCount = 0;
+        bearingNext = 0;
+        lastFrameBearingDeg = null;
+    }
 
     /** "30, 31, 32, 33" -- for telemetry, so the pinned cluster is never a mystery. */
     private static String idList(HiveGeometry.Cell cell) {
@@ -328,6 +408,11 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             sb.append(ids[i]);
         }
         return sb.toString();
+    }
+
+    /** "+1.2" / "-3.4", or "--" for a bearing that is missing. Telemetry only. */
+    private static String deg(Double v) {
+        return (v == null || v.isNaN()) ? "--" : String.format(Locale.US, "%+.1f", v);
     }
 
     private static double deadband(double value) {
