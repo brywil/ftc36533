@@ -67,12 +67,24 @@ public class Shooter {
      * Measured points, nearest first. Each pair is {distance in inches, launcher
      * velocity in ticks per second}.
      *
-     * ONE POINT SO FAR. 1300 ticks/s was found by hand in "2. Tank TeleOp" on
-     * 2026-10-15: dpad-up until the shots landed, with the wheel measured holding
-     * what it was asked for. The table is deliberately FLAT at that value for every
-     * distance -- one speed known to land beats four invented ones, and it never asks
-     * for LESS than the wheel is known to need. The cost is that the camera's range
-     * does not change the shot yet: there is only one speed to give.
+     * ONE POINT SO FAR, AND THE CURRENT VALUE IS NOT MEASURED. 1300 ticks/s was found
+     * by hand in "2. Tank TeleOp" on 2026-10-15 -- dpad-up until the shots landed, with
+     * the wheel measured holding what it was asked for -- and that number then
+     * OVERSHOT, so on 2026-10-16 it was dropped to 1200. 1200 is a guess: it moves in
+     * the 25 ticks/s unit the dpad tunes in, and lands clear of MIN_LAUNCH_VELOCITY
+     * below. Nobody has watched a ball land on it yet.
+     *
+     * REPLACE IT WITH THE NUMBER THAT LANDS. The dpad in "2. Tank TeleOp" moves the
+     * speed 25 at a time; press it until shots land, read `asked ... ticks/s` off the
+     * launcher telemetry, and paste that here. A written-down number is not evidence,
+     * and this one has less behind it than the 1300 it replaced.
+     *
+     * Do not go below MIN_LAUNCH_VELOCITY: below that the wheel can never measure as
+     * spun up, so the windmill never opens and there are no shots at all.
+     *
+     * The table is deliberately FLAT for every distance: one speed known to land beats
+     * four invented ones. The cost is that the camera's range does not change the shot
+     * yet, because there is only one speed to give.
      *
      * TO MAKE IT A REAL CURVE: find the speed that lands from a distance you have not
      * tuned at, and add the row. Two rows make rangeToVelocity() interpolate between
@@ -80,8 +92,8 @@ public class Shooter {
      */
     public static final double[][] RANGE_VELOCITY_TABLE = {
             // { inches, ticks per second }
-            { 24.0, 1300.0 },   // measured: this is where the shots land
-            { 96.0, 1300.0 },   // NOT measured -- flat until a far point is added
+            { 24.0, 1200.0 },   // was 1300 (measured 2026-10-15); overshot -- 1200 unverified
+            { 96.0, 1200.0 },   // NOT measured -- flat until a far point is added
     };
 
     /** Fewer measured points than this and rangeToVelocity() refuses to answer. */
