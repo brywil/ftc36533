@@ -89,7 +89,7 @@ public abstract class TankTeleOpBase extends LinearOpMode {
      * Averaging the members WITHIN one frame (see bearingToScoringCluster) cannot remove
      * everything: which members the camera reports still changes frame to frame -- now
      * two, now three -- so the frame's group mean still steps between values, and a turn
-     * command built from it steps with it. ForwardOneAimAndShootAuto hit the same thing
+     * command built from it steps with it. ForwardOneAimAndShootAutoBase hit the same thing
      * and measured the jump at 0..7 deg; the window there is what stops the robot
      * steering at whichever subset happened to be detected that frame. This is that
      * window, for the same reason.
@@ -325,7 +325,7 @@ public abstract class TankTeleOpBase extends LinearOpMode {
      * frame to frame, so a mean over one frame still steps: two members give one answer,
      * three give another, and the turn is built from whichever subset was seen. So the
      * per-frame mean is passed through a short rolling window (AIM_SMOOTH_FRAMES) -- the
-     * same fix ForwardOneAimAndShootAuto applies for the same reason -- and the input
+     * same fix ForwardOneAimAndShootAutoBase applies for the same reason -- and the input
      * becomes one continuous number instead of a sequence of jumps.
      *
      * @param now the loop's clock, so a long gap can be timed without a second read.

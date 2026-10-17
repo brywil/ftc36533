@@ -1,13 +1,24 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Drive one floor tile forward, aim at the nearest AprilTag, then shoot at it.
+ * Drive one floor tile forward, aim at OUR goal's AprilTags, then shoot at them.
+ *
+ * THIS FILE IS NOT AN OPMODE. It holds the logic; {@link ForwardOneAimAndShootAutoRed}
+ * and {@link ForwardOneAimAndShootAutoBlue} are the OpModes you pick on the Driver
+ * Station, and the only thing they decide is which tag cluster is our goal.
+ *
+ * WHY TWO OPMODES AND NOT A GUESS. The alliance cannot be worked out from the camera:
+ * facing the opponent's goal, "aim at the tag I can see" lines the robot up on THEIR
+ * goal and fires. {@link TankTeleOpBase} has the same split for the same reason. This
+ * auto used to aim at the mean of EVERY tag in view -- our goal, the opponent's goal
+ * and the AUDIENCE clusters alike -- which on a field with more than one cluster
+ * visible is an aim at the midpoint between two goals.
  *
  * The three pieces this stitches together, each of which already exists and works
  * on its own:
@@ -20,7 +31,7 @@ import java.util.Locale;
  *      range and refuses to feed until the wheel is actually up to speed.
  *
  * Aim and spin-up happen at the same time: the launcher is asked for a speed on
- * the first frame a tag is seen, and the wheel comes up while the robot is still
+ * the first frame a goal tag is seen, and the wheel comes up while the robot is still
  * finishing its turn. Feeding waits for BOTH "aimed" (bearing inside AutoAim's
  * deadband for SETTLE_MS) and "spun up" (a real encoder measurement).
  *
@@ -39,16 +50,23 @@ import java.util.Locale;
  * SAFETY:
  *   - Wheels off the ground (on blocks) for the FIRST run -- this aims and spins
  *     the launcher, and blocks let you watch both without throwing anything.
- *   - The launcher spins up as soon as a tag is in view, even before the robot is
- *     aimed. Keep hands and faces away from the muzzle the whole time.
- *   - If no tag is in view it searches: it spins slowly in place for up to one full
- *     rotation. Keep clear of the wheels. Once a tag HAS been seen, losing it stops
- *     the turn rather than hunting (see {@link AutoAim}).
+ *   - The launcher spins up as soon as one of our goal's tags is in view, even before
+ *     the robot is aimed. Keep hands and faces away from the muzzle the whole time.
+ *   - If none of our goal's tags is in view it searches: it spins slowly in place for
+ *     up to one full rotation. Keep clear of the wheels. Once a goal tag HAS been seen,
+ *     losing it stops the turn rather than hunting (see {@link AutoAim}).
  *   - If the tag never settles, or the wheel never reaches speed, it stops on a
  *     timeout instead of firing a guess.
  */
-@Autonomous(name = "9. Auto: 1 Square, Aim & Shoot", group = "Auto")
-public class ForwardOneAimAndShootAuto extends LinearOpMode {
+public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
+
+    /**
+     * Which cluster of BIOBUZZ tags is THIS robot's goal. Answered by the subclasses,
+     * and the only thing they have to answer: see HiveGeometry.Cell for the clusters.
+     * RED_FAR is the "RED SCORING" cluster (ids 30-33); BLUE_FAR is "BLUE SCORING"
+     * (ids 42-45). The AUDIENCE clusters are not goals and are never aimed at.
+     */
+    protected abstract HiveGeometry.Cell scoringCell();
 
     // --- Field geometry -----------------------------------------------------
 
@@ -173,10 +191,12 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
                 / (Math.PI * ForwardAndTurnAuto.WHEEL_DIAMETER_IN);
         int forwardTicks = (int) Math.round(SQUARES * ForwardAndTurnAuto.TILE_IN * ticksPerInch);
 
-        telemetry.addLine("Auto: 1 square forward, aim at the middle of the tags, shoot.");
+        telemetry.addLine("Auto: 1 square forward, aim at the middle of OUR goal's tags, shoot.");
         telemetry.addLine("WHEELS OFF THE GROUND for the first run.");
-        telemetry.addLine("Launcher spins as soon as a tag is in view -- keep clear.");
+        telemetry.addLine("Launcher spins as soon as a goal tag is in view -- keep clear.");
         telemetry.addLine();
+        telemetry.addData("alliance", "%s -> aim at %s (tags %s)",
+                scoringCell().alliance, scoringCell().clusterName, idList(scoringCell()));
         telemetry.addData("forward", "%d ticks (%.1f in)",
                 forwardTicks, SQUARES * ForwardAndTurnAuto.TILE_IN);
         telemetry.addData("limelight", tracker.hasLimelight() ? "OK" : "MISSING from config");
@@ -210,8 +230,9 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
         telemetry.addData("move", moveResult);
         telemetry.addData("shot", shotResult);
         telemetry.addData("tags seen", tagsSeenFrames == 0
-                ? "NEVER -- the camera saw no AprilTag this run"
-                : tagsSeenFrames + " frame(s); last: " + lastTagSeen);
+                ? "NEVER -- the camera saw no " + scoringCell().clusterName + " tag this run"
+                : tagsSeenFrames + " frame(s) of " + scoringCell().clusterName
+                  + "; last: " + lastTagSeen);
         telemetry.update();
 
         // Leave the result up for a moment so it can be read on the Driver Station.
@@ -219,20 +240,21 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
     }
 
     /**
-     * Find a tag (spin in place if none is in view), center the nearest one, spin
-     * the launcher to the range's speed, and feed once aimed AND up to speed.
-     * Returns a status string for the Driver Station describing how it ended.
+     * Find one of OUR goal's tags (spin in place while none of them is in view), center
+     * the cluster's middle, spin the launcher to the range's speed, and feed once aimed
+     * AND up to speed. Returns a status string for the Driver Station.
      *
-     * One loop does all of it because the jobs are coupled: the same tag gives both
+     * One loop does all of it because the jobs are coupled: the same tags give both
      * the bearing (aim) and the range (launcher speed), and feeding must wait on
      * both. Splitting them into phases would mean re-reading the tag with a
      * different frame each time.
      *
-     * SEARCH ONLY RUNS BEFORE THE FIRST TAG. Once one has been seen, a dropped tag
-     * means "no turn" (AutoAim's rule), not another spin: turning mid-shot throws
+     * SEARCH ONLY RUNS BEFORE THE FIRST GOAL TAG. Once one has been seen, a dropped
+     * tag means "no turn" (AutoAim's rule), not another spin: turning mid-shot throws
      * the aim off, and a tag that was just in view is more likely blinking than gone.
-     * The search is bounded by the encoders to one rotation, so a field with no tag
-     * in range stops instead of spinning forever.
+     * The search is bounded by the encoders to one rotation, so a field with no goal
+     * tag in range stops instead of spinning forever -- and the full turn sweeps past
+     * the other alliances' clusters without ever aiming at them.
      */
     private String aimAndShoot() {
         AutoAim aim = new AutoAim();
@@ -267,15 +289,25 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
         while (opModeIsActive()) {
             long now = System.currentTimeMillis();
 
-            // Aim at the MIDDLE of the tags in view, not at one of them. Aiming at
-            // the nearest tag lets the choice flip between adjacent members as their
-            // ranges cross, so the bearing jumps between them and the robot dithers
-            // and never settles. Averaging the group's bearings cancels that, and the
-            // per-tag camera noise with it. The range is the group's mean distance.
+            // Aim at the MIDDLE of OUR goal's tags -- not at one of them, and not at
+            // every tag in view. Aiming at the nearest tag lets the choice flip between
+            // adjacent members as their ranges cross, so the bearing jumps between them
+            // and the robot dithers and never settles. Averaging the cluster's bearings
+            // cancels that, and the per-tag camera noise with it. The range is the
+            // cluster's mean distance, because the shot leaves towards that cluster.
+            //
+            // The cluster filter below is the point of the split: another cluster in
+            // view -- the opponent's goal, or an AUDIENCE sticker -- must not pull the
+            // aim towards the midpoint between two goals. Only our own SCORING cluster
+            // may answer.
+            HiveGeometry.Cell want = scoringCell();
             List<LimelightHiveTracker.Tag> tags = tracker.recognize();
+            List<LimelightHiveTracker.Tag> goalTags = new ArrayList<>();
             double sumTx = 0.0, sumRange = 0.0;
             int nTx = 0, nRange = 0;
             for (LimelightHiveTracker.Tag t : tags) {
+                if (t.cell != want) continue;
+                goalTags.add(t);
                 sumTx += t.txDeg;
                 nTx++;
                 if (!Double.isNaN(t.rangeIn)) {
@@ -284,8 +316,8 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
                 }
             }
 
-            // Average this frame's group mean with the last few frames, so a frame
-            // that saw one tag instead of two does not yank the aim across.
+            // Average our cluster's mean from this frame with the last few frames, so a
+            // frame that saw one member instead of two does not yank the aim across.
             Double bearing;
             if (nTx > 0) {
                 bearingWin[bearingNext] = sumTx / nTx;
@@ -296,9 +328,10 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
                 for (int i = 0; i < bearingCount; i++) s += bearingWin[i];
                 bearing = s / bearingCount;
             } else {
-                // No tag this frame: stop aiming (null) rather than steer on stale
-                // data. Forget the window if the gap drags on, so an old angle cannot
-                // bias what we re-acquire.
+                // None of our goal in view this frame: stop aiming (null) rather than
+                // steer on stale data. Forget the window if the gap drags on, so an old
+                // angle cannot bias what we re-acquire. (Another alliance's cluster
+                // being visible does NOT count as a target -- see the filter above.)
                 bearing = null;
                 if (now - lastTagFrameMs > AIM_SMOOTH_RESET_MS) {
                     bearingCount = 0; bearingNext = 0;
@@ -318,14 +351,14 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
                 tagRange = null;
             }
 
-            // Latch every frame a tag is seen, so the count and the ids survive even
-            // if one is only visible for a moment.
-            if (!tags.isEmpty()) {
+            // Latch every frame one of our goal's tags is seen, so the count and the ids
+            // survive even if one is only visible for a moment.
+            if (nTx > 0) {
                 tagsSeenFrames++;
-                lastTagSeen = describeGroup(tags);
+                lastTagSeen = describeGroup(goalTags);
             }
 
-            // Range for the launcher: the group's, remembered for a moment so a
+            // Range for the launcher: our cluster's, remembered for a moment so a
             // single blinking frame does not drop the wheel's speed to zero.
             if (tagRange != null) {
                 lastRangeIn = tagRange;
@@ -369,8 +402,14 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
             if (shooter.getFeedPower() > 0 && feedStart == 0L) feedStart = now;
 
             // --- telemetry: what the aim loop and the wheel are doing ---
-            telemetry.addData("tag", tags.isEmpty() ? "none in view"
-                    : tags.size() + " in view " + describeGroup(tags));
+            // "goal tags" is the one that decides everything; "all tags" is there so
+            // "no goal tags, but I can see the opponent's" is obvious rather than a
+            // mystery. The exit messages name the cluster for the same reason.
+            telemetry.addData("goal tags", nTx == 0
+                    ? "NONE of " + want.clusterName
+                    : nTx + " of " + HiveGeometry.CLUSTER_MEMBER_COUNT
+                      + "   " + describeGroup(goalTags));
+            telemetry.addData("all tags", tags.isEmpty() ? "none" : describeGroup(tags));
             telemetry.addData("bearing", command.hasTarget
                     ? String.format(Locale.US, "%+.1f deg", command.bearingDeg) : "--");
             telemetry.addData("aim", searching ? "SEARCHING"
@@ -402,7 +441,8 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
                         + Math.abs(drive.rightTicks() - searchRightStart)) / 2.0;
                 if (swept >= searchTicks) {
                     drive.stop();
-                    return "STOPPED: searched a full turn, no tag -- check camera aim / pipeline";
+                    return "STOPPED: searched a full turn, no " + scoringCell().clusterName
+                         + " tag -- check the camera aim / pipeline";
                 }
             }
 
@@ -498,6 +538,17 @@ public class ForwardOneAimAndShootAuto extends LinearOpMode {
         return (value == Math.floor(value))
                 ? String.valueOf((long) value)
                 : String.valueOf(value);
+    }
+
+    /** "30, 31, 32, 33" -- for telemetry, so the pinned cluster is never a mystery. */
+    private static String idList(HiveGeometry.Cell cell) {
+        int[] ids = cell.memberIds();
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < ids.length; i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(ids[i]);
+        }
+        return sb.toString();
     }
 
     /** The tag IDs in view, e.g. "[32, 33]", for the latched "last seen" line. */

@@ -31,7 +31,7 @@ package org.firstinspires.ftc.teamcode;
  * reported exactly that: "it twitches to move instead of a more constant movement".
  *
  * The rest of this codebase already handles a blink this way and for the same
- * reason -- ForwardOneAimAndShootAuto holds its RANGE through one so a broken frame
+ * reason -- ForwardOneAimAndShootAutoBase holds its RANGE through one so a broken frame
  * cannot drop the wheel's speed to zero. The bearing had no such hold, which is the
  * gap this closes.
  *
