@@ -160,10 +160,16 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
      * LEAVE (3 pts) needs the robot "no longer contacting the perimeter wall"; PARK
      * (5 pts) needs it at least partially in the LOADING ZONE, which is the ~11 in strip
      * against that wall. Stopping a few inches short is what lets one position claim
-     * both, and the SWARM ranking point is scored on their COMBINED total. Zero would
-     * park flush against the wall and give up LEAVE to get PARK.
+     * both, and the SWARM ranking point is scored on their COMBINED total.
+     *
+     * Raised from 4 to 8 on 2026-10-19 after the first field run: the robot REVERSED INTO
+     * THE WALL. The reverse leg assumes the forward leg travelled exactly SQUARES tiles,
+     * and wheels slip on carpet, so the two errors stack up and the last few inches go
+     * into the wall. Eight inches keeps a third of the ~11 in zone in reach while leaving
+     * room for that error -- and being a couple of inches outside the zone costs nothing
+     * but a retry, where hitting the wall costs the auto.
      */
-    public static final double PARK_WALL_CLEARANCE_IN = 4.0;
+    public static final double PARK_WALL_CLEARANCE_IN = 8.0;
 
     /**
      * How square to the start wall counts as square, in degrees, before parking. The
@@ -230,6 +236,7 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
     private TankDrivebase drive;
     private LimelightHiveTracker tracker;
     private ShooterControls shooter;
+    private Intake intake;
 
     /** Encoder ticks per inch of wheel travel, from ForwardAndTurnAuto's geometry. */
     private double ticksPerInch;
@@ -264,6 +271,7 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         drive = new TankDrivebase(hardwareMap);
         tracker = new LimelightHiveTracker(hardwareMap, LIMELIGHT_NAME, FIDUCIAL_PIPELINE);
         shooter = new ShooterControls(new Shooter(hardwareMap));
+        intake = new Intake(hardwareMap);
 
         // The Control Hub's built-in IMU, OPTIONAL: the kitbot's Robot Configuration has
         // historically left it out. With it the park knows the heading exactly; without
@@ -341,9 +349,10 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         String shotResult = aimAndShoot();
         drive.stop();
 
-        // The launcher is done; the drivebase is not. Stop the wheel before parking so a
-        // spinning flywheel is not left running through the turn.
+        // The launcher is done; the drivebase is not. Stop the wheel and the intake before
+        // parking, so nothing is running through the turn.
         shooter.stop();
+        intake.stop();
         String parkResult = park();
 
         // Everything off, whatever happened.
@@ -526,6 +535,14 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
                     && Math.abs(command.bearingDeg) <= FIRE_TOLERANCE_DEG;
             boolean wantFeed = aimed || feedStart != 0L;
             shooter.requestFeed(wantFeed, false);
+
+            // Move the INTAKE with the feed. The windmill only pushes balls into the
+            // launcher; the roller and the two corner servos are what bring balls to the
+            // windmill in the first place. The teleop runs all of them off RB, but this
+            // auto never created an Intake at all, so in AUTO the windmill was pushing at
+            // balls that nothing had fed to it.
+            intake.setMotor(wantFeed ? 1.0 : 0.0);
+            intake.setServos(wantFeed ? 1.0 : 0.0);
             if (aimed) everAimed = true;
 
             // Latch off what the feed actually DID, not what was asked for, so the timer
@@ -708,6 +725,18 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
                 turnTicks, -turnTicks);
         if (!REACHED.equals(turned)) return "no park -- turn failed: " + turned;
 
+        // DID THE TURN ACTUALLY HAPPEN? Same reasoning as squareUp: the next leg is a long
+        // blind drive, and on the first field run the robot turned to the wrong heading and
+        // drove into a perimeter wall. A heading we can check is the difference between
+        // "parked" and "hit the wall", so check it before moving.
+        updateHeading();
+        double turnError = normalizeDeg(headingDeg - PARK_TURN_DEG);
+        if (Math.abs(turnError) > 2 * SQUARE_TOLERANCE_DEG) {
+            return String.format(Locale.US,
+                    "no park -- turn ended at %+.1f deg, wanted %+.1f (off by %+.1f) -- "
+                    + "refusing to drive blind", headingDeg, PARK_TURN_DEG, turnError);
+        }
+
         int alongTicks = (int) Math.round(PARK_DISTANCE_IN * ticksPerInch);
         String along = driveForward("along the wall to the loading zone", alongTicks);
         if (!REACHED.equals(along)) return "no park -- along the wall: " + along;
@@ -775,8 +804,19 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
                 (error / 360.0) * Math.PI * ForwardAndTurnAuto.TRACK_WIDTH_IN * ticksPerInch);
         String result = spinBy(String.format(Locale.US,
                 "%s (%+.1f deg, was %+.1f)", label, error, headingDeg), turnTicks, -turnTicks);
+        if (!REACHED.equals(result)) return result;
+
+        // DID IT ACTUALLY SQUARE UP? This is the check that matters. If the gyro sign or
+        // axis is wrong, the correction turn goes the wrong way and doubles the error
+        // instead of removing it -- and then every leg after this one is aimed at a wall.
+        // Better to refuse to park than to drive 96 in on a heading nobody verified.
         updateHeading();
-        return result;
+        if (Math.abs(normalizeDeg(headingDeg)) > 2 * SQUARE_TOLERANCE_DEG) {
+            return String.format(Locale.US,
+                    "squaring did NOT take: heading %+.1f deg after turning %+.1f -- "
+                    + "check the hub orientation (LogoFacing RIGHT, USB UP)", headingDeg, error);
+        }
+        return REACHED;
     }
 
     /**
