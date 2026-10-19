@@ -20,15 +20,22 @@ import java.util.Locale;
  * and the AUDIENCE clusters alike -- which on a field with more than one cluster
  * visible is an aim at the midpoint between two goals.
  *
- * The three pieces this stitches together, each of which already exists and works
+ * The four pieces this stitches together, each of which already exists and works
  * on its own:
  *
- *   1. a dead-reckoned one-tile move -- {@link ForwardAndTurnAuto}'s geometry and
+ *   1. a dead-reckoned two-tile move -- {@link ForwardAndTurnAuto}'s geometry and
  *      the same per-side encoder check;
  *   2. aiming -- {@link AutoAim} turns the tag's bearing to zero, and the robot
  *      turns with it while driving nothing else;
  *   3. the shot -- {@link ShooterControls} picks the launcher speed from the tag
- *      range and refuses to feed until the wheel is actually up to speed.
+ *      range and refuses to feed until the wheel is actually up to speed;
+ *   4. parking -- back to the wall, turn right, drive along it into the LOADING ZONE
+ *      for PARK points (BIOBUZZ 10.5.4). See {@link #park()}.
+ *
+ * THE WHOLE RUN HAS TO FIT IN 30 SECONDS (BIOBUZZ 10.1), and nothing here has a clock
+ * over the lot -- it simply stops when the MATCH does. So FEED_DURATION_MS is the knob
+ * that buys the park its time: it is 10 s, not 15, because two squares out, the aim,
+ * the backing-up and the 96 in along the wall all come out of the same budget.
  *
  * Aim and spin-up happen at the same time: the launcher is asked for a speed on
  * the first frame a goal tag is seen, and the wheel comes up while the robot is still
@@ -128,6 +135,32 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
      */
     public static final double SEARCH_SPAN_DEG = 400.0;
 
+    // --- Parking (BIOBUZZ 10.5.4) -------------------------------------------
+
+    /**
+     * How far to drive ALONG the wall to reach the LOADING ZONE, in inches.
+     *
+     * 8 feet, i.e. 4 of the field's 24 in TILEs, measured by the team on 2026-10-19 from
+     * the corner the robot starts in, parking area to the right. It does not have to be
+     * exact: the zone is only ~23 in wide and the rule is "at least partially in the
+     * LOADING ZONE", so a robot ~18 in wide that is a foot off still overlaps it.
+     */
+    public static final double PARK_DISTANCE_IN = 96.0;
+
+    /** How far to turn toward the parking area, in degrees. Clockwise (right) is positive. */
+    public static final double PARK_TURN_DEG = 90.0;
+
+    /**
+     * Stop this far short of the perimeter wall, in inches, when backing up.
+     *
+     * LEAVE (3 pts) needs the robot "no longer contacting the perimeter wall"; PARK
+     * (5 pts) needs it at least partially in the LOADING ZONE, which is the ~11 in strip
+     * against that wall. Stopping a few inches short is what lets one position claim
+     * both, and the SWARM ranking point is scored on their COMBINED total. Zero would
+     * park flush against the wall and give up LEAVE to get PARK.
+     */
+    public static final double PARK_WALL_CLEARANCE_IN = 4.0;
+
     // --- Aiming and shooting ------------------------------------------------
 
     /**
@@ -138,8 +171,17 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
      */
     public static final long AIM_TIMEOUT_MS = 6000;
 
-    /** How long to keep feeding once the shot is ready. 15 s after settled. */
-    public static final long FEED_DURATION_MS = 15000;
+    /**
+     * How long to keep feeding once the shot is ready, after settled.
+     *
+     * 10 s, down from 15 s: AUTO is only 30 s long (BIOBUZZ 10.1) and parking has to
+     * happen inside it. Two squares out (~3 s), aiming, spin-up, 10 s of feeding, then
+     * backing to the wall (~2.5 s), a 90 deg turn (~1.5 s) and 96 in along the wall
+     * (~4 s) lands around 25-29 s -- close enough to the horn that a slow aim or a
+     * search will eat the park. If the run report shows it still feeding at 30 s, this
+     * is the number to cut, not the park.
+     */
+    public static final long FEED_DURATION_MS = 10000;
 
     /**
      * How far off centre the aim may be and still fire, in degrees. This is the gate
@@ -227,14 +269,20 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         drive.stop();
 
         String shotResult = aimAndShoot();
+        drive.stop();
+
+        // The launcher is done; the drivebase is not. Stop the wheel before parking so a
+        // spinning flywheel is not left running through the turn.
+        shooter.stop();
+        String parkResult = park();
 
         // Everything off, whatever happened.
         drive.stop();
-        shooter.stop();
         tracker.close();
 
         telemetry.addData("move", moveResult);
         telemetry.addData("shot", shotResult);
+        telemetry.addData("park", parkResult);
         telemetry.addData("tags seen", tagsSeenFrames == 0
                 ? "NEVER -- the camera saw no " + scoringCell().clusterName + " tag this run"
                 : tagsSeenFrames + " frame(s) of " + scoringCell().clusterName
@@ -526,6 +574,93 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
                 drive.stop();
                 settle();
                 return "TIMED OUT -- check geometry";
+            }
+            idle();
+        }
+
+        drive.stop();
+        return "stopped";
+    }
+
+    /**
+     * Finish inside the LOADING ZONE, for PARK points. BIOBUZZ 10.5.4: "To qualify for
+     * PARK points, a ROBOT must move so that it is at least partially in the LOADING
+     * ZONE", assessed at the end of AUTO and worth 5 match points.
+     *
+     * Three legs, all dead-reckoned against the drive encoders, because the kitbot has
+     * no IMU:
+     *
+     *   1. back up to the wall, stopping PARK_WALL_CLEARANCE_IN short of it;
+     *   2. turn PARK_TURN_DEG toward the parking area;
+     *   3. drive PARK_DISTANCE_IN along the wall.
+     *
+     * THE ORDER MATTERS. The robot shoots from SQUARES tiles out, which is far outside
+     * an 11 in deep zone, so going sideways first would leave it just as far out, merely
+     * offset. Backing up first puts it back against the wall while its heading is still
+     * roughly the one the aim left it with; the along-wall leg then slides it into the
+     * zone. Reversing is also the one leg that does not need a turn, so the least can go
+     * wrong before the wall position is re-established.
+     *
+     * NOT VALIDATED ON A FIELD, and it cannot be made precise with the hardware we have:
+     * AutoAim's turn is open loop, so by the time we park the heading has changed by an
+     * unknown amount, and PARK_DISTANCE_IN is a hand measurement. Treat the first run as
+     * an experiment -- wheels off the ground -- and read the "park" lines.
+     */
+    private String park() {
+        int backTicks = (int) Math.round(
+                (SQUARES * ForwardAndTurnAuto.TILE_IN - PARK_WALL_CLEARANCE_IN) * ticksPerInch);
+        String back = driveForward("back to the wall", -backTicks);
+        if (!REACHED.equals(back)) return "no park -- backing up failed: " + back;
+
+        double turnTicksExact = (PARK_TURN_DEG / 360.0) * Math.PI
+                * ForwardAndTurnAuto.TRACK_WIDTH_IN * ticksPerInch;
+        int turnTicks = (int) Math.round(turnTicksExact);
+        // A clockwise spin is left side forward, right side backward.
+        String turned = spinBy("turn " + format(PARK_TURN_DEG) + " deg right",
+                turnTicks, -turnTicks);
+        if (!REACHED.equals(turned)) return "no park -- turn failed: " + turned;
+
+        int alongTicks = (int) Math.round(PARK_DISTANCE_IN * ticksPerInch);
+        String along = driveForward("along the wall to the loading zone", alongTicks);
+        if (!REACHED.equals(along)) return "no park -- along the wall: " + along;
+
+        return "parked: back to the wall, " + format(PARK_TURN_DEG) + " deg right, "
+                + format(PARK_DISTANCE_IN) + " in along it";
+    }
+
+    /**
+     * Spin both sides by opposite tick deltas and wait for them, the same encoder wait
+     * driveForward uses. A turn that arrives is a turn; one that does not is caught by
+     * the timeout rather than by the encoder-not-reading verdict, because a stalled
+     * spin is a very different fault from an unplugged cable.
+     */
+    private String spinBy(String label, int leftDelta, int rightDelta) {
+        int leftStart = drive.leftTicks();
+        int rightStart = drive.rightTicks();
+        drive.driveToTicks(leftStart + leftDelta, rightStart + rightDelta, DRIVE_POWER);
+
+        long begin = System.currentTimeMillis();
+        while (opModeIsActive()) {
+            int leftMoved = drive.leftTicks() - leftStart;
+            int rightMoved = drive.rightTicks() - rightStart;
+            long elapsed = System.currentTimeMillis() - begin;
+
+            telemetry.addData("park", label);
+            telemetry.addData("  left", "%d / %d ticks", leftMoved, leftDelta);
+            telemetry.addData("  right", "%d / %d ticks", rightMoved, rightDelta);
+            telemetry.addData("  elapsed", "%d ms", elapsed);
+            telemetry.update();
+
+            if (Math.abs(leftDelta - leftMoved) <= TOLERANCE_TICKS
+                    && Math.abs(rightDelta - rightMoved) <= TOLERANCE_TICKS) {
+                drive.stop();
+                settle();
+                return REACHED;
+            }
+            if (elapsed > FORWARD_TIMEOUT_MS) {
+                drive.stop();
+                settle();
+                return "TIMED OUT turning -- check track width / power";
             }
             idle();
         }
