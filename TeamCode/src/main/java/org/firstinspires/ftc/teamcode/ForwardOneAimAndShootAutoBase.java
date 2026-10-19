@@ -1,6 +1,10 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.RevHubOrientationOnRobot;
+
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -161,6 +165,14 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
      */
     public static final double PARK_WALL_CLEARANCE_IN = 4.0;
 
+    /**
+     * How square to the start wall counts as square, in degrees, before parking. The
+     * heading estimate comes from the wheel encoders and drifts a little with slip, so
+     * this only has to be tighter than the error the zone can absorb: the zone is ~23 in
+     * deep across the direction of travel, and a 96 in leg at 3 deg wanders ~5 in.
+     */
+    public static final double SQUARE_TOLERANCE_DEG = 3.0;
+
     // --- Aiming and shooting ------------------------------------------------
 
     /**
@@ -222,6 +234,26 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
     /** Encoder ticks per inch of wheel travel, from ForwardAndTurnAuto's geometry. */
     private double ticksPerInch;
 
+    /** Drive encoder counts at the start of the run: the reference the heading is measured from. */
+    private int leftTicksAtStart = 0, rightTicksAtStart = 0;
+
+    /**
+     * The Control Hub's built-in IMU, if the Robot Configuration has it as "imu", or null.
+     *
+     * It is OPTIONAL because the kitbot's configuration has historically left it out
+     * (WIRING.md said it was not needed) -- but the hub has one, and for parking it is
+     * much better than wheel counting: it measures the turn the aim actually made
+     * instead of inferring it from wheels that may have scrubbed on carpet.
+     */
+    private IMU imu;
+
+    /**
+     * Estimated heading in degrees, clockwise positive, 0 = the heading the robot started
+     * on. Comes from the IMU when there is one, and from the drive encoders otherwise --
+     * the aim turn is open loop, so this is the only record of what it did.
+     */
+    private double headingDeg = 0.0;
+
     // Latched for the end-of-run report: how many frames had a tag, and the last one
     // seen. A single detection would otherwise flash past in the live telemetry.
     private int tagsSeenFrames = 0;
@@ -232,6 +264,22 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         drive = new TankDrivebase(hardwareMap);
         tracker = new LimelightHiveTracker(hardwareMap, LIMELIGHT_NAME, FIDUCIAL_PIPELINE);
         shooter = new ShooterControls(new Shooter(hardwareMap));
+
+        // The Control Hub's built-in IMU, OPTIONAL: the kitbot's Robot Configuration has
+        // historically left it out. With it the park knows the heading exactly; without
+        // it the park falls back to counting wheels (see updateHeading).
+        //
+        // ORIENTATION, from the robot as built (2026-10-19): the hub sits upright with
+        // its LOGO facing the robot's RIGHT and its USB port UP. Get this wrong and the
+        // gyro reports a different axis as "yaw", so the park squares up to a nonsense
+        // angle and quietly drives off -- which is why the pre-start telemetry below
+        // shows the heading live, so it can be checked by hand before every run.
+        imu = hardwareMap.tryGet(IMU.class, "imu");
+        if (imu != null) {
+            imu.initialize(new IMU.Parameters(new RevHubOrientationOnRobot(
+                    RevHubOrientationOnRobot.LogoFacingDirection.RIGHT,
+                    RevHubOrientationOnRobot.UsbFacingDirection.UP)));
+        }
 
         // One tile expressed in the drive motors' own ticks, using the geometry
         // already measured and recorded in ForwardAndTurnAuto.
@@ -248,6 +296,9 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         telemetry.addData("forward", "%d ticks (%.1f in)",
                 forwardTicks, SQUARES * ForwardAndTurnAuto.TILE_IN);
         telemetry.addData("limelight", tracker.hasLimelight() ? "OK" : "MISSING from config");
+        telemetry.addData("imu", imu != null
+                ? "OK -- parking squares up on the gyro"
+                : "not in config -- parking dead-reckons from the wheels");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
         telemetry.addData("table", Shooter.RANGE_VELOCITY_TABLE.length
@@ -258,12 +309,31 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         telemetry.addLine("Add a row for a second distance to make it distance-aware.");
         telemetry.update();
 
-        waitForStart();
+        // Live pre-start heading. Spin the robot by hand and this number must move the way
+        // the robot turns -- increasing when you turn it clockwise, with the same
+        // magnitude. If it barely moves, or moves when you TIP the robot instead of
+        // spinning it, the hub orientation above is wrong and the park would square up to
+        // a nonsense angle. Ten seconds here beats a mystery on the field.
+        while (!isStarted() && !isStopRequested()) {
+            updateHeading();
+            telemetry.addData("heading (spin me by hand)", "%+.1f deg, from %s",
+                    headingDeg, imu != null ? "the gyro" : "the wheels");
+            telemetry.update();
+            idle();
+        }
         if (isStopRequested()) return;
+
+        // Zero the heading reference here, at the start of the run: 0 deg is the heading
+        // the robot is staged on, and every park leg is measured from it.
+        if (imu != null) imu.resetYaw();
 
         // Start the camera before the move so it is warmed up and streaming by the
         // time the robot stops; the first frames after a cold start are dropped.
         tracker.start();
+
+        // Heading reference for the park: everything about the wall is measured from here.
+        leftTicksAtStart = drive.leftTicks();
+        rightTicksAtStart = drive.rightTicks();
 
         String moveResult = driveForward("forward " + format(SQUARES) + " squares", forwardTicks);
         drive.stop();
@@ -424,6 +494,13 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
             AutoAim.Aim command = aim.update(bearing, now);
             if (command.hasTarget && aimStart == 0L) aimStart = now;
 
+            // The heading, live, while the robot turns. Watch it as the aim turns the
+            // robot RIGHT (clockwise): this number must get LARGER. If it shrinks, or
+            // hardly moves while the robot clearly rotates, the hub orientation in the
+            // init block is wrong -- fix that before trusting the park, because squareUp
+            // uses this same sign.
+            updateHeading();
+
             // Before the first tag: search. After it: hand the turn to AutoAim, so a
             // lost tag just stops the turn instead of hunting.
             boolean searching = !command.hasTarget && aimStart == 0L;
@@ -470,6 +547,8 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
                     : !command.hasTarget ? "no target"
                     : aimed ? "CLOSE -> firing"
                     : "turning");
+            telemetry.addData("heading", "%+.1f deg  from %s  (larger = turned right)",
+                    headingDeg, imu != null ? "the gyro" : "the wheels");
             telemetry.addData("tags seen", "%d frame(s)%s", tagsSeenFrames,
                     lastTagSeen == null ? "" : "   last: " + lastTagSeen);
             telemetry.addData("range", rangeIn == null
@@ -607,6 +686,15 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
      * an experiment -- wheels off the ground -- and read the "park" lines.
      */
     private String park() {
+        // FIRST, undo whatever the aim did to the heading. The robot aimed at tags on
+        // the HIVE's CELLs, which sit in the centre of the FIELD, so after aiming it is
+        // pointing at the centre -- diagonal, from a corner -- and not perpendicular to
+        // the wall it started against. Every leg below assumes "reverse goes back to the
+        // wall" and "90 deg right runs along it", so without this the 96 in drive would
+        // be a blind leg in an unknown direction.
+        String squared = squareUp("square up to the start wall");
+        if (!REACHED.equals(squared)) return "no park -- squaring up: " + squared;
+
         int backTicks = (int) Math.round(
                 (SQUARES * ForwardAndTurnAuto.TILE_IN - PARK_WALL_CLEARANCE_IN) * ticksPerInch);
         String back = driveForward("back to the wall", -backTicks);
@@ -667,6 +755,68 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
 
         drive.stop();
         return "stopped";
+    }
+
+    /**
+     * Turn the robot back to its START heading, so the park is relative to the wall
+     * rather than to wherever the aim happened to leave it.
+     *
+     * The heading comes from {@link #updateHeading} -- the IMU when there is one, wheel
+     * counting otherwise -- and either way it is an ESTIMATE: the gyro drifts slowly and
+     * the wheels slip, which is why {@link #SQUARE_TOLERANCE_DEG} is not zero and why the
+     * park is still worth watching on the first run.
+     */
+    private String squareUp(String label) {
+        updateHeading();
+        double error = -normalizeDeg(headingDeg);   // turn this much to get back to 0
+        if (Math.abs(error) <= SQUARE_TOLERANCE_DEG) return REACHED;
+
+        int turnTicks = (int) Math.round(
+                (error / 360.0) * Math.PI * ForwardAndTurnAuto.TRACK_WIDTH_IN * ticksPerInch);
+        String result = spinBy(String.format(Locale.US,
+                "%s (%+.1f deg, was %+.1f)", label, error, headingDeg), turnTicks, -turnTicks);
+        updateHeading();
+        return result;
+    }
+
+    /**
+     * Recompute the heading. Clockwise is positive, matching the drivebase and the turn
+     * commands.
+     *
+     * THE IMU IS PREFERRED when the Robot Configuration has one: it measures the turn
+     * that actually happened, including the aim's open-loop spin, and it does not care
+     * about carpet, slip, or one side scrubbing harder than the other.
+     *
+     * THE ENCODER ESTIMATE IS THE FALLBACK, for a robot with no "imu" in its config. A
+     * differential drive knows its own heading from the wheels: spinning in place turns
+     * them opposite ways, each through an arc of radius trackWidth/2, so
+     *
+     *     heading = (left travel - right travel) / trackWidth      [clockwise positive]
+     *
+     * -- the same geometry {@code ForwardAndTurnAuto} uses to command a turn, read
+     * backwards off the encoders instead of written forwards to them. Straight driving
+     * leaves left and right equal, so it does not disturb the estimate.
+     *
+     * Note the IMU yaw is CCW positive (see MecanumDrivebase.getHeading), hence the minus
+     * sign: this codebase's turn convention is clockwise positive.
+     */
+    private void updateHeading() {
+        if (imu != null) {
+            headingDeg = -imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES);
+            return;
+        }
+        double leftIn = (drive.leftTicks() - leftTicksAtStart) / ticksPerInch;
+        double rightIn = (drive.rightTicks() - rightTicksAtStart) / ticksPerInch;
+        headingDeg = Math.toDegrees(
+                (leftIn - rightIn) / ForwardAndTurnAuto.TRACK_WIDTH_IN);
+    }
+
+    /** Fold an angle into (-180, 180], so a 400 deg search spin squares up the short way. */
+    private static double normalizeDeg(double deg) {
+        double d = deg % 360.0;
+        if (d > 180.0) d -= 360.0;
+        if (d <= -180.0) d += 360.0;
+        return d;
     }
 
     /** Let the wheels actually come to rest before we read position or start aiming. */
