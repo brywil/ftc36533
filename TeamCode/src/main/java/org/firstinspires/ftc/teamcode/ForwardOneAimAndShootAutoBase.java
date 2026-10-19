@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Drive one floor tile forward, aim at OUR goal's AprilTags, then shoot at them.
+ * Drive two floor tiles forward, aim at OUR goal's AprilTags, then shoot at them.
  *
  * THIS FILE IS NOT AN OPMODE. It holds the logic; {@link ForwardOneAimAndShootAutoRed}
  * and {@link ForwardOneAimAndShootAutoBlue} are the OpModes you pick on the Driver
@@ -71,8 +71,13 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
 
     // --- Field geometry -----------------------------------------------------
 
-    /** How many floor tiles to drive forward before aiming. The request was one. */
-    public static final double SQUARES = 1.0;
+    /**
+     * How many floor tiles to drive forward before aiming. Two, by request.
+     *
+     * TILE_IN (24 in) is ForwardAndTurnAuto's figure for the field's foam TILE, which
+     * BIOBUZZ §9.2 gives as "approximately 24 in. by 24 in." -- so this is 48 in.
+     */
+    public static final double SQUARES = 2.0;
 
     // --- Motion -------------------------------------------------------------
 
@@ -192,7 +197,7 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
                 / (Math.PI * ForwardAndTurnAuto.WHEEL_DIAMETER_IN);
         int forwardTicks = (int) Math.round(SQUARES * ForwardAndTurnAuto.TILE_IN * ticksPerInch);
 
-        telemetry.addLine("Auto: 1 square forward, aim at the middle of OUR goal's tags, shoot.");
+        telemetry.addLine("Auto: " + format(SQUARES) + " squares forward, aim at the middle of OUR goal's tags, shoot.");
         telemetry.addLine("WHEELS OFF THE GROUND for the first run.");
         telemetry.addLine("Launcher spins as soon as a goal tag is in view -- keep clear.");
         telemetry.addLine();
@@ -218,7 +223,7 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         // time the robot stops; the first frames after a cold start are dropped.
         tracker.start();
 
-        String moveResult = driveForward("forward " + format(SQUARES) + " square", forwardTicks);
+        String moveResult = driveForward("forward " + format(SQUARES) + " squares", forwardTicks);
         drive.stop();
 
         String shotResult = aimAndShoot();

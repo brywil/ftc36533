@@ -11,7 +11,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
  *
  * BLUE_FAR is the "BLUE SCORING" cluster, ids 42-45 (HiveGeometry.Cell).
  */
-@Autonomous(name = "9blue. Auto: 1 Square, Aim & Shoot", group = "Auto")
+@Autonomous(name = "9blue. Auto: 2 Squares, Aim & Shoot", group = "Auto")
 public class ForwardOneAimAndShootAutoBlue extends ForwardOneAimAndShootAutoBase {
     @Override
     protected HiveGeometry.Cell scoringCell() {

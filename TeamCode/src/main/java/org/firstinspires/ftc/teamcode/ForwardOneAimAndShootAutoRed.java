@@ -11,7 +11,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
  *
  * RED_FAR is the "RED SCORING" cluster, ids 30-33 (HiveGeometry.Cell).
  */
-@Autonomous(name = "9red. Auto: 1 Square, Aim & Shoot", group = "Auto")
+@Autonomous(name = "9red. Auto: 2 Squares, Aim & Shoot", group = "Auto")
 public class ForwardOneAimAndShootAutoRed extends ForwardOneAimAndShootAutoBase {
     @Override
     protected HiveGeometry.Cell scoringCell() {
