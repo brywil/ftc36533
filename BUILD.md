@@ -116,22 +116,18 @@ C:\Users\tim\ftc-build\ftc-sdk\TeamCode\build\outputs\apk\debug\TeamCode-debug.a
 
 ---
 
-## The camera and the programming cable share a port
+## If the camera goes quiet, check its cable
 
-Deploying needs the PC in the Control Hub's USB port — that is what `adb` talks over — and
-`WIRING.md` puts the Limelight 3A on a Control Hub USB port as well. **So the camera comes
-out to program the hub, and has to go back in afterwards.**
+The Limelight appears in the Robot Configuration, so **its presence in the config proves
+nothing** — `hasLimelight()` returns true for a camera that is switched off, unplugged, or
+dead. Every OpMode then behaves as though a camera were attached, just with no data
+arriving: `4. HIVE Bench (Limelight)` finds no AprilTags and the aim reports
+`NO TAG -- looking for … SCORING` rather than "no camera".
 
-Not hypothetical. On 2026-10-17 the aim in `2a`/`2b` reported
-`NO TAG -- looking for BLUE SCORING` and `4. HIVE Bench (Limelight)` found no AprilTags at
-all, because the camera had been left unplugged after a deploy the night before. Worth
-knowing how it presented: **nothing said "no camera"** — the Limelight was still in the
-Robot Configuration, so `hasLimelight()` was true and every OpMode carried on as if a camera
-were there, just with no data arriving. The symptom pointed at the aim, and the cause was a
-cable.
-
-If the aim says NO TAG and bench sees nothing, check the camera's LED (green, 15-20 s after
-power) and its cable **before** touching code.
+That cost us an evening on 2026-10-17, chasing the aim loop when the camera had simply not
+been plugged back in. The camera and the programming cable **do not conflict** — both can be
+connected at once — so there is no cable juggling to blame and no excuse for leaving it out:
+check the camera's LED and its cable before touching any code.
 
 ---
 
