@@ -23,10 +23,24 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * HIVES, alliance areas and AprilTags DO mirror left/right, which is why mirroring the
  * turns looked right; a mirrored path ends near A2, the wrong end of the red wall.)
  *
- * WHERE TO START. Blue was tested; put the robot where it starts for that run. For red,
- * turn that position AND heading 180 degrees about the field centre: a blue start near
- * the audience end of the right wall becomes a red start near the rear end of the left
- * wall, facing the opposite way.
+ * WHERE TO START (tiles as in manual Figure 9-5: columns A-F left to right from the
+ * audience, rows 1-6 from the audience wall back). Both are legal starts under G304,
+ * and both appear as examples in manual Figure 11-1.
+ *
+ *   BLUE: tile D6, against the REAR wall, facing the audience (toward the blue hive) --
+ *         the blue circle in Figure 11-1, where this run was tested.
+ *         fwd 1 -> D5; left -> facing the right wall; fwd 1 -> E5; right -> facing the
+ *         audience; fwd 2.5 -> E2.5; left; fwd 1, back 0.2 -> on the right wall at about
+ *         row 2.5, in the blue LOADING ZONE (F2).
+ *
+ *   RED:  tile C1, against the AUDIENCE wall, facing the rear (toward the red hive) --
+ *         blue's start turned 180 degrees; the red square at C1 in Figure 11-1.
+ *         fwd 1 -> C2; left -> facing the left wall; fwd 1 -> B2; right -> facing the
+ *         rear; fwd 2.5 -> B4.5; left; fwd 1, back 0.2 -> on the left wall at about
+ *         row 4.5, in the red LOADING ZONE (A5).
+ *
+ * (The mirrored red path from C6 would end on the left wall around A2.5 -- at the red
+ * side's FLOWER, three tiles from the red LOADING ZONE.)
  *
  * NO AIMING. This OpMode assumes the robot is already lined up on the goal when START
  * is pressed. It does not use the Limelight at all -- no tag search, no bearing, no
@@ -133,7 +147,9 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         telemetry.addData("alliance", alliance());
         telemetry.addLine("Auto: shoot (no aim), then fwd 1, left 90, fwd 1, right 90, fwd 2.5, left 90, fwd 1.");
         if (alliance() == HiveGeometry.Alliance.RED) {
-            telemetry.addLine("RED: start at the blue start turned 180 deg about the field centre.");
+            telemetry.addLine("RED START: tile C1, against the AUDIENCE wall, facing the red hive.");
+        } else {
+            telemetry.addLine("BLUE START: tile D6, against the REAR wall, facing the blue hive.");
         }
         telemetry.addLine("Robot must ALREADY be lined up. WHEELS OFF THE GROUND first run.");
         telemetry.addLine();
