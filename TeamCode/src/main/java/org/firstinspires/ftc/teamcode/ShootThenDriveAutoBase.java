@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /**
@@ -8,10 +7,26 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * forward 1 square, right 90, forward 2.5 squares, left 90, forward 1 square, then
  * back up 0.2 squares.
  *
- * This is the BLUE path. {@link ShootThenDriveRedAuto} is the SAME routine, same turns,
- * started from this start turned 180 degrees about the field centre: the BIOBUZZ loading
- * zones are placed by rotation, not mirrored (manual Figures 9-3, 9-5; see the red file).
- * If you retune one, make the identical change in the other.
+ * THIS FILE IS NOT AN OPMODE. It holds the whole routine; {@link ShootThenDriveAutoBlue}
+ * and {@link ShootThenDriveAutoRed} are the OpModes you pick on the Driver Station, and
+ * all each one decides is which alliance it is. Red and blue therefore run the SAME
+ * code -- there is nothing to keep in sync -- and alliance() is where an alliance-specific
+ * feature (auto-aim at our own goal, for one) plugs in later.
+ *
+ * WHY RED RUNS THE SAME TURNS AS BLUE. The BIOBUZZ field is not a mirror image left to
+ * right where this path ends up. The LOADING ZONES and GARDENS are placed with 180 degree
+ * ROTATION (Competition Manual Figures 9-3 and 9-5): the red LOADING ZONE is tile A5, at
+ * the REAR end of the red (left) wall, and the blue LOADING ZONE is tile F2, at the
+ * AUDIENCE end of the blue (right) wall. A half turn of the field carries one onto the
+ * other, and a half turn does not swap left and right. So red's run is blue's run,
+ * unchanged, started from blue's start turned 180 degrees about the field centre. (The
+ * HIVES, alliance areas and AprilTags DO mirror left/right, which is why mirroring the
+ * turns looked right; a mirrored path ends near A2, the wrong end of the red wall.)
+ *
+ * WHERE TO START. Blue was tested; put the robot where it starts for that run. For red,
+ * turn that position AND heading 180 degrees about the field centre: a blue start near
+ * the audience end of the right wall becomes a red start near the rear end of the left
+ * wall, facing the opposite way.
  *
  * NO AIMING. This OpMode assumes the robot is already lined up on the goal when START
  * is pressed. It does not use the Limelight at all -- no tag search, no bearing, no
@@ -39,8 +54,14 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * SAFETY: wheels off the ground for the first run. The launcher spins on START -- keep
  * clear of the muzzle. Every move has a timeout and stops if a drive encoder is dead.
  */
-@Autonomous(name = "11. Auto: Shoot, Then Drive (Blue)", group = "Auto")
-public class ShootThenDriveAuto extends LinearOpMode {
+public abstract class ShootThenDriveAutoBase extends LinearOpMode {
+
+    /**
+     * Which alliance this OpMode is for. Answered by the two subclasses. The routine does
+     * not use it yet beyond telemetry -- the path is the same for both (see the class
+     * comment) -- but it is the one place an alliance-specific feature should read from.
+     */
+    protected abstract HiveGeometry.Alliance alliance();
 
     // --- Shooting -----------------------------------------------------------
 
@@ -109,7 +130,11 @@ public class ShootThenDriveAuto extends LinearOpMode {
         ticksPerInch = ForwardAndTurnAuto.TICKS_PER_WHEEL_REV
                 / (Math.PI * ForwardAndTurnAuto.WHEEL_DIAMETER_IN);
 
+        telemetry.addData("alliance", alliance());
         telemetry.addLine("Auto: shoot (no aim), then fwd 1, left 90, fwd 1, right 90, fwd 2.5, left 90, fwd 1.");
+        if (alliance() == HiveGeometry.Alliance.RED) {
+            telemetry.addLine("RED: start at the blue start turned 180 deg about the field centre.");
+        }
         telemetry.addLine("Robot must ALREADY be lined up. WHEELS OFF THE GROUND first run.");
         telemetry.addLine();
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
