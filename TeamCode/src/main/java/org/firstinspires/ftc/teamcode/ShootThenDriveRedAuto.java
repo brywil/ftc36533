@@ -5,12 +5,23 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /**
  * Shoot from where the robot already is, then drive the RED-alliance path: forward 1
- * square, RIGHT 90, forward 1 square, LEFT 90, forward 2.5 squares, RIGHT 90, forward
- * 1 square, then back up 0.2 squares.
+ * square, left 90, forward 1 square, right 90, forward 2.5 squares, left 90, forward
+ * 1 square, then back up 0.2 squares -- the SAME path as the blue auto.
  *
- * This is the mirror of {@link ShootThenDriveAuto}: identical shooting and distances,
- * with every turn reversed, because the red side of the field is mirrored from blue.
- * If you fix or retune the blue one, mirror the same change here.
+ * WHY THE SAME TURNS, NOT MIRRORED ONES. The BIOBUZZ field is not a mirror image left
+ * to right. The LOADING ZONES and GARDENS are placed with 180 degree ROTATION
+ * (Competition Manual Figures 9-3 and 9-5): the red LOADING ZONE is tile A5, at the
+ * REAR end of the red (left) wall, and the blue LOADING ZONE is tile F2, at the
+ * AUDIENCE end of the blue (right) wall. Turning the whole field half way round carries
+ * one onto the other, and a half turn does not swap left and right -- so the red copy
+ * of the tested blue run is the blue run, unchanged, started from the spot you get by
+ * turning blue's start half way round the field centre. (A mirrored path from the
+ * mirrored start would end near A2, the wrong end of the red wall.)
+ *
+ * WHERE TO START IT. Take where the blue robot starts on the right wall, and its
+ * heading, and turn both 180 degrees about the field centre: a blue start near the
+ * audience end of the right wall becomes a red start near the REAR end of the left wall,
+ * facing the opposite way. If you retune the blue auto, make the identical change here.
  *
  * NO AIMING. Assumes the robot is already lined up on the red goal at START. It does
  * not use the Limelight at all. The launcher spins up to a fixed speed and feeds.
@@ -21,8 +32,8 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  *      wheel cannot hang the OpMode;
  *   3. feed for FEED_DURATION_MS (5 s), with the intake running so a ball touching it
  *      still gets pulled in;
- *   4. drive at 50% power: forward 1, RIGHT 90, forward 1, LEFT 90, forward 2.5,
- *      RIGHT 90, forward 1, then reverse 0.2;
+ *   4. drive at 50% power: forward 1, left 90, forward 1, right 90, forward 2.5,
+ *      left 90, forward 1, then reverse 0.2 (identical to blue);
  *   5. stop and report.
  *
  * SAFETY: wheels off the ground for the first run. The launcher spins on START -- keep
@@ -59,7 +70,7 @@ public class ShootThenDriveRedAuto extends LinearOpMode {
     /** How far each turn goes, in degrees. */
     public static final double TURN_DEG = 90.0;
 
-    /** +1 is clockwise, -1 counter-clockwise. RED turn order is right, left, right. */
+    /** +1 is clockwise, -1 counter-clockwise. Turn order is left, right, left, as on blue. */
     public static final double TURN_RIGHT_SIGN = 1.0;
     public static final double TURN_LEFT_SIGN = -1.0;
 
@@ -87,7 +98,8 @@ public class ShootThenDriveRedAuto extends LinearOpMode {
         ticksPerInch = ForwardAndTurnAuto.TICKS_PER_WHEEL_REV
                 / (Math.PI * ForwardAndTurnAuto.WHEEL_DIAMETER_IN);
 
-        telemetry.addLine("RED auto: shoot, then fwd 1, right 90, fwd 1, left 90, fwd 2.5, right 90, fwd 1.");
+        telemetry.addLine("RED auto: shoot, then fwd 1, left 90, fwd 1, right 90, fwd 2.5, left 90, fwd 1.");
+        telemetry.addLine("Start at BLUE's start turned 180 deg about the field centre.");
         telemetry.addLine("Robot must ALREADY be lined up. WHEELS OFF THE GROUND first run.");
         telemetry.addLine();
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
@@ -134,15 +146,15 @@ public class ShootThenDriveRedAuto extends LinearOpMode {
         shooter.stop();
         sleep(300);
 
-        // --- 4: post-shot movement at 50%, turns mirrored from the blue auto ---
-        String fwd1 = "", turnR = "", fwd2 = "", turnL = "", fwd3 = "", turnR2 = "", fwd4 = "", lastBack = "";
+        // --- 4: post-shot movement at 50%, the SAME turns as the blue auto (see the class comment) ---
+        String fwd1 = "", turnL = "", fwd2 = "", turnR = "", fwd3 = "", turnL2 = "", fwd4 = "", lastBack = "";
         if (opModeIsActive()) {
             fwd1 = driveForward("after: forward 1", FORWARD_1_SQUARES);
-            turnR = turn("after: turn right 90", TURN_RIGHT_SIGN);
-            fwd2 = driveForward("after: forward 1", FORWARD_2_SQUARES);
             turnL = turn("after: turn left 90", TURN_LEFT_SIGN);
+            fwd2 = driveForward("after: forward 1", FORWARD_2_SQUARES);
+            turnR = turn("after: turn right 90", TURN_RIGHT_SIGN);
             fwd3 = driveForward("after: forward 2.5", FORWARD_3_SQUARES);
-            turnR2 = turn("after: turn right 90", TURN_RIGHT_SIGN);
+            turnL2 = turn("after: turn left 90", TURN_LEFT_SIGN);
             fwd4 = driveForward("after: forward 1", FORWARD_4_SQUARES);
             lastBack = driveBackward("after: backward 0.2", BACKWARD_FINAL_SQUARES);
         }
@@ -152,11 +164,11 @@ public class ShootThenDriveRedAuto extends LinearOpMode {
 
         telemetry.addData("launch", ready ? "fired" : "wheel never reached speed");
         telemetry.addData("forward 1", fwd1);
-        telemetry.addData("turn right 90", turnR);
-        telemetry.addData("forward 1", fwd2);
         telemetry.addData("turn left 90", turnL);
+        telemetry.addData("forward 1", fwd2);
+        telemetry.addData("turn right 90", turnR);
         telemetry.addData("forward 2.5", fwd3);
-        telemetry.addData("turn right 90", turnR2);
+        telemetry.addData("turn left 90", turnL2);
         telemetry.addData("forward 1", fwd4);
         telemetry.addData("backward 0.2", lastBack);
         telemetry.update();

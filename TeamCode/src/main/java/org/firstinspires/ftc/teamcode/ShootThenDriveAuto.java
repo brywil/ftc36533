@@ -8,8 +8,10 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * forward 1 square, right 90, forward 2.5 squares, left 90, forward 1 square, then
  * back up 0.2 squares.
  *
- * This is the BLUE path. {@link ShootThenDriveRedAuto} is the same routine with every
- * turn mirrored for the red side of the field; if you retune one, mirror it in the other.
+ * This is the BLUE path. {@link ShootThenDriveRedAuto} is the SAME routine, same turns,
+ * started from this start turned 180 degrees about the field centre: the BIOBUZZ loading
+ * zones are placed by rotation, not mirrored (manual Figures 9-3, 9-5; see the red file).
+ * If you retune one, make the identical change in the other.
  *
  * NO AIMING. This OpMode assumes the robot is already lined up on the goal when START
  * is pressed. It does not use the Limelight at all -- no tag search, no bearing, no
