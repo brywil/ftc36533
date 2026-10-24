@@ -67,6 +67,16 @@ public abstract class TankTeleOpBase extends LinearOpMode {
     /** Gamepad sticks rarely read exactly zero when you let go. Below this is "not touched". */
     private static final double DEADBAND = 0.05;
 
+    /**
+     * How long to sample the sticks in INIT to learn their true rest position. Some
+     * pads report a constant OFFSET on an axis (seen: left stick Y ~+0.4 at rest), and
+     * a deadband cannot absorb that without eating the usable travel. Subtracting the
+     * measured rest value makes "hands off" mean zero regardless of the pad.
+     *
+     * Keep the sticks centred while the robot sits at INIT.
+     */
+    private static final long STICK_ZERO_CAL_MS = 500;
+
     /** Multiplier at full precision trigger. */
     private static final double CREEP_SCALE = 0.30;
 
@@ -159,6 +169,34 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
         telemetry.update();
+
+        // Learn the sticks' rest position while waiting for START (sticks centred).
+        // Seen on the real pad: left stick Y reading ~+0.4 at rest, which drove the
+        // robot backwards whenever the driver let go. A deadband cannot fix an offset
+        // that large; subtracting it can.
+        double zeroLeftY = 0.0, zeroLeftX = 0.0, zeroRightX = 0.0;
+        {
+            long calStart = System.currentTimeMillis();
+            double sumY = 0, sumLX = 0, sumRX = 0;
+            int n = 0;
+            while (!isStarted() && !isStopRequested()
+                    && System.currentTimeMillis() - calStart < STICK_ZERO_CAL_MS) {
+                sumY += gamepad1.left_stick_y;
+                sumLX += gamepad1.left_stick_x;
+                sumRX += gamepad1.right_stick_x;
+                n++;
+                sleep(10);
+            }
+            if (n > 0) {
+                zeroLeftY = sumY / n;
+                zeroLeftX = sumLX / n;
+                zeroRightX = sumRX / n;
+            }
+        }
+        telemetry.addData("stick zero", "L.y %+.2f  L.x %+.2f  R.x %+.2f",
+                zeroLeftY, zeroLeftX, zeroRightX);
+        telemetry.update();
+
         waitForStart();
         if (isStopRequested()) return;
 
@@ -185,9 +223,14 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             if (aimHeld && aimCommand.settled) aimedThisHold = true;
 
             // --- drive: arcade, no strafe (a skid-steer cannot slide) ---
-            double forward = square(deadband(-gamepad1.left_stick_y));
-            double stickTurn = clamp(square(deadband(gamepad1.left_stick_x))
-                                   + square(deadband(gamepad1.right_stick_x)), -1.0, 1.0);
+            // Subtract the stick's measured rest offset first, then deadband, so a
+            // pad that does not centre reads as zero when the driver lets go.
+            double forward = square(deadband(clamp(-(gamepad1.left_stick_y - zeroLeftY),
+                                                   -1.0, 1.0)));
+            double stickTurn = clamp(
+                    square(deadband(clamp(gamepad1.left_stick_x - zeroLeftX, -1.0, 1.0)))
+                  + square(deadband(clamp(gamepad1.right_stick_x - zeroRightX, -1.0, 1.0))),
+                    -1.0, 1.0);
 
             // The driver keeps the last word on turning: move either stick and the aim
             // lets go for as long as it is moved. A held RB must never be a robot that
