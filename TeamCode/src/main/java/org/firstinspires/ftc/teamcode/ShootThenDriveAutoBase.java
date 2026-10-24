@@ -80,7 +80,7 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
     // --- Shooting -----------------------------------------------------------
 
     /** Launcher wheel speed for the shot, ticks/s. Same as the other autos. */
-    public static final double LAUNCH_VELOCITY = 1300.0;
+    public static final double LAUNCH_VELOCITY = 1275.0;
 
     /**
      * Cap on waiting for the wheel to report at-speed before feeding anyway. Raised

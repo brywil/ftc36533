@@ -122,16 +122,16 @@ public class ForwardAndTurnAuto extends LinearOpMode {
 
     /**
      * Launcher wheel speed for the shot, in encoder ticks per second. This is the
-     * SAME kind of number the distance->speed table holds. 1300 is a little above
-     * goBILDA's 1250 baseline: enough to throw the ball farther without pushing the
-     * wheel past what it can hold. Tune in steps and watch the shot, not the number.
+     * SAME kind of number the distance->speed table holds. 1275 is one manual step
+     * below the 1300 that was found to overshoot, and matches the table in
+     * {@link Shooter}. Tune in steps and watch the shot, not the number.
      *
      * WATCH OUT: this is a closed-loop target. If the wheel cannot actually reach it
      * (weak battery, or too high a value), the spin-up wait below times out and the
      * telemetry says "launcher at speed: NO" -- that means the speed is above what the
      * motor can hold, not that the code is broken.
      */
-    public static final double LAUNCH_VELOCITY = 1300.0;
+    public static final double LAUNCH_VELOCITY = 1275.0;
 
     /** Let the chassis stop rocking after the turn before feeding, so the shot is straight. */
     public static final long SETTLE_AFTER_TURN_MS = 500;

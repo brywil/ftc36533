@@ -31,10 +31,10 @@ public class LaunchOnlyAuto extends LinearOpMode {
 
     /**
      * Launcher wheel speed for the shot, in encoder ticks per second. Matches
-     * ForwardAndTurnAuto's value so the two autos shoot the same: 1300 is a little
-     * above goBILDA's 1250 baseline. Tune by watching the ball, not the number.
+     * ForwardAndTurnAuto's value so the two autos shoot the same: 1275, one step below
+     * the 1300 that was found to overshoot. Tune by watching the ball, not the number.
      */
-    public static final double LAUNCH_VELOCITY = 1300.0;
+    public static final double LAUNCH_VELOCITY = 1275.0;
 
     /**
      * Wait at most this long for the wheel to report at-speed before feeding anyway.
