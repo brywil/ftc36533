@@ -96,7 +96,7 @@ public abstract class TankTeleOpBase extends LinearOpMode {
      * How many recent updates the cluster bearing is averaged over (a rolling window).
      * At this loop's rate that spans a few camera frames.
      *
-     * Averaging the members WITHIN one frame (see bearingToScoringCluster) cannot remove
+     * Averaging the members WITHIN one frame (see bearingToHive) cannot remove
      * everything: which members the camera reports still changes frame to frame -- now
      * two, now three -- so the frame's group mean still steps between values, and a turn
      * command built from it steps with it. ForwardOneAimAndShootAutoBase hit the same thing
@@ -134,10 +134,10 @@ public abstract class TankTeleOpBase extends LinearOpMode {
     private static final boolean REQUIRE_AIM_TO_FIRE = false;
 
     /**
-     * Which cluster of BIOBUZZ tags is THIS robot's goal. Answered by the subclasses,
-     * and the only thing they have to answer: see HiveGeometry.Cell for the clusters.
-     * RED_FAR is the "RED SCORING" cluster (ids 30-33); BLUE_FAR is "BLUE SCORING"
-     * (ids 42-45). The AUDIENCE clusters are not goals and are never aimed at.
+     * Which cluster of BIOBUZZ tags is THIS robot's primary goal. Answered by the
+     * subclasses. RED_FAR is the "RED SCORING" cluster (ids 30-33); BLUE_FAR is
+     * "BLUE SCORING" (ids 42-45). The opposite cluster on the same HIVE is used as
+     * a fallback when the scoring side is not in view.
      */
     protected abstract HiveGeometry.Cell scoringCell();
 
@@ -163,8 +163,11 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         boolean aimedThisHold = false;
 
         telemetry.addLine("Ready. Point the robot downfield before START.");
-        telemetry.addData("alliance", "%s -> aim at %s (tags %s)",
-                scoringCell().alliance, scoringCell().clusterName, idList(scoringCell()));
+        telemetry.addData("alliance", "%s", scoringCell().alliance);
+        telemetry.addData("aim", "%s (tags %s)",
+                scoringCell().clusterName, idList(scoringCell()));
+        telemetry.addData("  fallback", "%s (tags %s)",
+                scoringCell().opposite().clusterName, idList(scoringCell().opposite()));
         telemetry.addData("limelight", aimAvailable ? "OK" : "MISSING -- aim disabled");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
@@ -216,7 +219,7 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             }
             aimHeldPrev = aimHeld;
 
-            Double bearing = aimHeld ? bearingToScoringCluster(tracker, now) : null;
+            Double bearing = aimHeld ? bearingToHive(tracker, now) : null;
             AutoAim.Aim aimCommand = aimHeld
                     ? aim.update(bearing, now)
                     : new AutoAim.Aim(0.0, false, false, false, Double.NaN);
@@ -304,7 +307,8 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                     shooter.isSpunUp() ? "READY" : "spinning up");
             telemetry.addData("feed", shooter.feedState());
             telemetry.addData("aim", aimText(aimAvailable, aimHeld, bearing, aimCommand));
-            telemetry.addData("aim cluster", "%d of %d tags   frame %s   smoothed %s",
+            telemetry.addData("aim cluster", "%s   %d of %d tags   frame %s   smoothed %s",
+                    lastAimCell == null ? "--" : lastAimCell.clusterName,
                     lastClusterMembers, HiveGeometry.CLUSTER_MEMBER_COUNT,
                     deg(lastFrameBearingDeg), deg(bearing));
             telemetry.addData("fire gate", !REQUIRE_AIM_TO_FIRE ? "not gated on aim"
@@ -337,68 +341,73 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         if (!aimAvailable) return "no camera";
         if (!aimHeld) return "off (hold RB)";
         if (command.coasting) return "coasting (tag dropped a frame)";
-        if (bearing == null) return "NO TAG -- looking for " + scoringCell().clusterName;
-        return command.settled ? "AIMED"
-                : String.format(Locale.US, "turning %+.1f deg", bearing);
+        if (bearing == null) {
+            return "NO TAG -- looking for " + scoringCell().clusterName
+                    + " or " + scoringCell().opposite().clusterName;
+        }
+        String side = lastAimCell == scoringCell() ? ""
+                : " [" + lastAimCell.clusterName + " fallback]";
+        return command.settled ? "AIMED" + side
+                : String.format(Locale.US, "turning %+.1f deg%s", bearing, side);
     }
 
     /**
-     * Bearing to the CENTRE of our SCORING cluster, in degrees, or null when none of it
-     * is in view.
+     * Bearing to the CENTRE of our HIVE, in degrees, or null when neither of its
+     * clusters is in view.
      *
-     * Deliberately not nearestTag(). The nearest tag of any kind can be an AUDIENCE
-     * cluster or, worse, the opponent's goal -- and aiming at either lines the robot up
-     * to score for the other alliance. Only our own SCORING cluster is a valid answer.
+     * The SCORING cluster is preferred. If the camera can only see the AUDIENCE side
+     * of the same HIVE, that cluster is used as a fallback rather than reporting no
+     * target. The opponent's HIVE is never accepted.
      *
-     * AND DELIBERATELY NOT THE NEAREST MEMBER OF THAT CLUSTER EITHER, which is what this
-     * did first. A CELL is four tags across one sticker, so they span real angle: the
-     * left member and the right member of the same cluster read several degrees apart.
-     * Picking the nearest member per frame means the target SWITCHES as the robot turns
-     * -- aim at the left tag, then the middle one is nearer, then the left again -- and
-     * each switch throws the bearing sideways in one step. The robot hunts back and
-     * forth between members and never settles, which is exactly what the driver saw:
-     * "twitching and undecided which one".
+     * Within the chosen cluster this averages the members present instead of taking the
+     * nearest member, because a CELL is four tags across one sticker and the nearest
+     * member changes as the robot turns. The per-frame mean then goes through a short
+     * rolling window, so a frame that sees a different subset does not yank the turn.
      *
-     * Averaging the members present gives one continuous number that means "the middle
-     * of the goal", which is the thing worth aiming at anyway, and it cancels per-tag
-     * solve noise besides -- the same reasoning LimelightHiveTracker.gate() uses when it
-     * averages a cluster rather than trusting whichever member was detected first.
-     *
-     * AND NOT JUST THIS FRAME'S MEAN EITHER. Which members the camera reports changes
-     * frame to frame, so a mean over one frame still steps: two members give one answer,
-     * three give another, and the turn is built from whichever subset was seen. So the
-     * per-frame mean is passed through a short rolling window (AIM_SMOOTH_FRAMES) -- the
-     * same fix ForwardOneAimAndShootAutoBase applies for the same reason -- and the input
-     * becomes one continuous number instead of a sequence of jumps.
+     * The window is dropped when the chosen side changes, so a fallback angle cannot
+     * bleed into the scoring angle when the camera re-acquires the scoring side.
      *
      * @param now the loop's clock, so a long gap can be timed without a second read.
      */
-    private Double bearingToScoringCluster(LimelightHiveTracker tracker, long now) {
-        HiveGeometry.Cell want = scoringCell();
-        double sum = 0.0;
-        int found = 0;
-        for (LimelightHiveTracker.Tag t : tracker.recognize()) {
-            if (t.cell != want) continue;
-            sum += t.txDeg;
-            found++;
-        }
-        lastClusterMembers = found;
+    private Double bearingToHive(LimelightHiveTracker tracker, long now) {
+        HiveGeometry.Cell primary = scoringCell();
+        HiveGeometry.Cell fallback = primary.opposite();
+        double primarySum = 0.0, fallbackSum = 0.0;
+        int primaryFound = 0, fallbackFound = 0;
 
-        if (found == 0) {
-            // None of the goal in view this frame. Report null and let AutoAim's own
-            // COAST_MS decide how long a gap may last -- but keep the window, so the next
-            // frame that DOES see the goal is still smoothed against the recent past.
-            // Only a gap that drags on drops it, because an angle from before the goal
-            // left the frame is worse than no smoothing at all.
+        for (LimelightHiveTracker.Tag t : tracker.recognize()) {
+            if (t.cell == primary) {
+                primarySum += t.txDeg;
+                primaryFound++;
+            } else if (t.cell == fallback) {
+                fallbackSum += t.txDeg;
+                fallbackFound++;
+            }
+        }
+
+        HiveGeometry.Cell chosen;
+        double sum;
+        int found;
+        if (primaryFound > 0) {
+            chosen = primary;
+            sum = primarySum;
+            found = primaryFound;
+        } else if (fallbackFound > 0) {
+            chosen = fallback;
+            sum = fallbackSum;
+            found = fallbackFound;
+        } else {
+            lastClusterMembers = 0;
             lastFrameBearingDeg = null;
             if (now - lastClusterFrameMs > AIM_SMOOTH_RESET_MS) clearAimSmoothing();
             return null;
         }
 
-        // This frame's own mean first, kept for telemetry, then the windowed answer.
-        // While the window is still filling this is a mean of what exists so far, so the
-        // very first frame after aim starts is that frame's own value -- no lag, and no
-        // old data to bias it.
+        if (chosen != lastAimCell) {
+            clearAimSmoothing();
+            lastAimCell = chosen;
+        }
+        lastClusterMembers = found;
         lastFrameBearingDeg = sum / found;
         bearingWin[bearingNext] = lastFrameBearingDeg;
         bearingNext = (bearingNext + 1) % AIM_SMOOTH_FRAMES;
@@ -416,6 +425,9 @@ public abstract class TankTeleOpBase extends LinearOpMode {
      * from the whole goal or from a single tag that happened to be detected.
      */
     private int lastClusterMembers = 0;
+
+    /** Which side of our HIVE supplied the last bearing; null when none was in view. */
+    private HiveGeometry.Cell lastAimCell = null;
 
     /**
      * This frame's raw cluster mean, before smoothing -- the value that used to step
@@ -440,6 +452,8 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         bearingCount = 0;
         bearingNext = 0;
         lastFrameBearingDeg = null;
+        lastAimCell = null;
+        lastClusterMembers = 0;
     }
 
     /** "30, 31, 32, 33" -- for telemetry, so the pinned cluster is never a mystery. */
