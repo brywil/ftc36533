@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import java.util.Locale;
 
@@ -67,35 +68,30 @@ public class Shooter {
      * Measured points, nearest first. Each pair is {distance in inches, launcher
      * velocity in ticks per second}.
      *
-     * ONE POINT SO FAR, AND THE CURRENT VALUE IS NOT MEASURED. 1300 ticks/s was found
-     * by hand in "2. Tank TeleOp" on 2026-10-15 -- dpad-up until the shots landed, with
-     * the wheel measured holding what it was asked for -- and that number then
-     * OVERSHOT, so on 2026-10-16 it was dropped to 1275: one step of MANUAL_STEP, the
-     * unit the teleop dpad tunes in. 1275 is a guess. Nobody has watched a ball land on
-     * it, and one step is a small change -- range falls roughly with the SQUARE of the
-     * speed, so 2% off the wheel is nearer 4% off the distance. If the shots still
-     * overshoot, this is the number to keep walking down.
+     * Two BLUE shots landed on 2026-11-02:
+     *   close wall, lined up straight on, about 48 in -> 1350 ticks/s
+     *   close corner nearest the BLUE HIVE, about 76 in -> 1450 ticks/s
+     * The inch values are field-geometry estimates. Replace them with the range shown
+     * on the Driver Station when the Limelight has the tags in view.
      *
-     * REPLACE IT WITH THE NUMBER THAT LANDS. The dpad in "2. Tank TeleOp" moves the
-     * speed 25 at a time; press it until shots land, read `asked ... ticks/s` off the
-     * launcher telemetry, and paste that here. A written-down number is not evidence,
-     * and this one has less behind it than the 1300 it replaced.
+     * The RED side mirrors the BLUE side, so these distances apply to RED as well.
+     * Below the first point the table clamps to 1350; above the last it clamps to 1450.
+     * Add more measured points as they are found.
+     *
+     * RECORD THE BATTERY VOLTAGE with each point ("5. Shooter Calibrate" prints it as a
+     * comment on every row). The wheel is closed loop, but it can only hold a speed
+     * while the battery has voltage headroom: tuned on a weak battery the wheel could
+     * not reach the asked speed, so those numbers really meant a slower wheel and will
+     * OVERSHOOT on a fresh pack. If a row does not say its voltage, it could be measured
+     * under either condition -- treat it as unknown and re-measure charged.
      *
      * Do not go below MIN_LAUNCH_VELOCITY: below that the wheel can never measure as
      * spun up, so the windmill never opens and there are no shots at all.
-     *
-     * The table is deliberately FLAT for every distance: one speed known to land beats
-     * four invented ones. The cost is that the camera's range does not change the shot
-     * yet, because there is only one speed to give.
-     *
-     * TO MAKE IT A REAL CURVE: find the speed that lands from a distance you have not
-     * tuned at, and add the row. Two rows make rangeToVelocity() interpolate between
-     * them, which is the whole point of the Limelight shooting OpModes.
      */
     public static final double[][] RANGE_VELOCITY_TABLE = {
             // { inches, ticks per second }
-            { 24.0, 1275.0 },   // was 1300 (measured 2026-10-15); overshot -- 1275 unverified
-            { 96.0, 1275.0 },   // NOT measured -- flat until a far point is added
+            { 48.0, 1350.0 },   // BLUE close wall, straight on
+            { 76.0, 1450.0 },   // BLUE close corner nearest the HIVE
     };
 
     /** Fewer measured points than this and rangeToVelocity() refuses to answer. */
@@ -107,6 +103,9 @@ public class Shooter {
     private final DcMotorEx launcher;
     private final CRServo windmill;
 
+    /** Battery voltage sensor, if this hub has one. Only used to record calibration conditions. */
+    private final VoltageSensor battery;
+
     // The velocity we last asked for, so isSpunUp() can be a real measurement rather
     // than a timer: has the wheel actually reached (most of) the target?
     private double commandedVelocity = 0.0;
@@ -117,6 +116,15 @@ public class Shooter {
         // configured as a plain motor.
         launcher = hardwareMap.tryGet(DcMotorEx.class, LAUNCHER);
         windmill = hardwareMap.tryGet(CRServo.class, WINDMILL);
+
+        // The Control Hub reports battery voltage; a phone + expansion hub may list more
+        // than one. Any of them is fine -- it is only recorded with calibration points.
+        VoltageSensor foundBattery = null;
+        for (VoltageSensor sensor : hardwareMap.voltageSensor) {
+            foundBattery = sensor;
+            break;
+        }
+        battery = foundBattery;
 
         if (launcher != null) {
             launcher.setDirection(LAUNCHER_REVERSE
@@ -151,6 +159,19 @@ public class Shooter {
 
     /** What we last asked the wheel to hold, ticks per second. */
     public double getCommandedVelocity() { return commandedVelocity; }
+
+    /**
+     * Battery voltage in volts, or NaN when the hub reports none.
+     *
+     * This does NOT control anything. It is recorded with each calibration point so the
+     * table always says what charge it was measured at. A charged battery can spin the
+     * wheel faster for the same request, so a table tuned while the battery was weak
+     * will overshoot when it is full. Shots only come up short once the voltage sags so
+     * far that the wheel can no longer reach the asked speed -- watch actual vs asked.
+     */
+    public double getBatteryVoltage() {
+        return battery == null ? Double.NaN : battery.getVoltage();
+    }
 
     /**
      * Hold a velocity (ticks per second). During a match prefer rangeToVelocity.

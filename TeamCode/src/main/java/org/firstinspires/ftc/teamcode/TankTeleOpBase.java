@@ -40,12 +40,12 @@ import java.util.Locale;
  *   left bumper           intake (roller + servos) forward only, no aim, no fire
  *   square                intake ROLLER reverse + windmill reverse; servos stay still
  *                         (also cancels aim and fire while held)
- *   dpad up / down        launcher speed -/+  (launcher runs in MANUAL, always on)
+ *   dpad up / down        manual launcher speed -/+ (used when no tag range is available)
  *
- * THE LAUNCHER IS ALWAYS RUNNING. There is no arm button: from START it spins at the
- * manual speed (ShooterControls.DEFAULT_MANUAL_VELOCITY), so the driver only tunes it
- * with the dpad. Because it is manual, the launcher does not need the Limelight -- but
- * the AIM does, so this OpMode uses the camera only for the turn axis.
+ * THE LAUNCHER IS ALWAYS RUNNING. There is no arm button. When the Limelight sees our
+ * HIVE's tag, the launcher speed comes from Shooter.RANGE_VELOCITY_TABLE for that
+ * range; when no usable range is in view for a moment, it falls back to the last
+ * manual speed so a blink cannot stop the wheel.
  *
  * RIGHT BUMPER DOES THREE THINGS: it runs the intake, turns the robot toward our goal
  * tag, and feeds. Aiming and firing at the same time is the point -- hold RB as you
@@ -111,6 +111,8 @@ public abstract class TankTeleOpBase extends LinearOpMode {
      * before the goal left the frame cannot bias the bearing re-acquired after it.
      */
     private static final long AIM_SMOOTH_RESET_MS = 400;
+
+    private static final long RANGE_HOLD_MS = 300;
 
     /**
      * OFF. RB aims, runs the intake, and fires -- and the fire is gated by the
@@ -284,11 +286,33 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             shooter.requestFeed(gamepad1.right_bumper && !gamepad1.square && aimGateOpen,
                                 gamepad1.square);
 
-            // --- launcher: always spinning in MANUAL; dpad tunes the speed ---
-            if (gamepad1.dpad_up   && !upPrev)   shooter.nudgeManualVelocity(+MANUAL_STEP);
-            if (gamepad1.dpad_down && !downPrev) shooter.nudgeManualVelocity(-MANUAL_STEP);
+            // --- launcher: AUTO from the tag range, MANUAL when there is no range ---
+            Double measuredRange = aimAvailable ? rangeToHive(tracker) : null;
+            if (measuredRange != null) {
+                lastRangeIn = measuredRange;
+                lastRangeMs = now;
+            }
+            Double rangeForShooter = lastRangeIn != null && now - lastRangeMs <= RANGE_HOLD_MS
+                    ? lastRangeIn : null;
+            boolean useAuto = rangeForShooter != null
+                    && shooter.shooter().rangeToVelocity(rangeForShooter) != null;
+
+            // The dpad must ALWAYS change the speed the driver hears, even when a tag is
+            // in view and AUTO owns the number. In AUTO it trims the table speed; in
+            // MANUAL it nudges the manual speed. Without this the dpad did nothing
+            // exactly where you stand to calibrate -- tag in view -- so there was no way
+            // to walk the speed until the shots landed.
+            double dpadDelta = 0.0;
+            if (gamepad1.dpad_up   && !upPrev)   dpadDelta += MANUAL_STEP;
+            if (gamepad1.dpad_down && !downPrev) dpadDelta -= MANUAL_STEP;
             upPrev = gamepad1.dpad_up; downPrev = gamepad1.dpad_down;
-            shooter.update(null);   // manual: no range needed
+            if (dpadDelta != 0.0) {
+                if (useAuto) shooter.nudgeAutoTrim(dpadDelta);
+                else shooter.nudgeManualVelocity(dpadDelta);
+            }
+
+            shooter.setManual(!useAuto);
+            shooter.update(rangeForShooter);
 
             // Square reverses the launcher too, for the whole time it is held. This is
             // set AFTER update() so it wins over the manual speed. The sign matters:
@@ -302,9 +326,15 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                     forwardCommand, turnCommand, aimDriving ? "  (aim)" : "");
             telemetry.addData("intake", "motor %+.0f  servos %+.0f",
                     intakeMotor, intakeServos);
-            telemetry.addData("launcher", "asked %.0f  actual %.0f ticks/s  %s",
-                    shooter.getCommandedVelocity(), shooter.getVelocity(),
-                    shooter.isSpunUp() ? "READY" : "spinning up");
+            telemetry.addData("launcher", "%s  asked %.0f  actual %.0f ticks/s  %s%s",
+                    shooter.velocitySource(), shooter.getCommandedVelocity(),
+                    shooter.getVelocity(), shooter.isSpunUp() ? "READY" : "spinning up",
+                    useAuto ? String.format(Locale.US, "  trim %+.0f", shooter.getAutoTrimVelocity()) : "");
+            telemetry.addData("battery", Double.isNaN(shooter.shooter().getBatteryVoltage())
+                    ? "no sensor" : String.format(Locale.US, "%.1f V", shooter.shooter().getBatteryVoltage()));
+            if (!Double.isNaN(shooter.getLastRangeIn())) {
+                telemetry.addData("  range", "%.1f in", shooter.getLastRangeIn());
+            }
             telemetry.addData("feed", shooter.feedState());
             telemetry.addData("aim", aimText(aimAvailable, aimHeld, bearing, aimCommand));
             telemetry.addData("aim cluster", "%s   %d of %d tags   frame %s   smoothed %s",
@@ -419,6 +449,28 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         return windowed / bearingCount;
     }
 
+    private Double rangeToHive(LimelightHiveTracker tracker) {
+        HiveGeometry.Cell primary = scoringCell();
+        HiveGeometry.Cell fallback = primary.opposite();
+        double primarySum = 0.0, fallbackSum = 0.0;
+        int primaryFound = 0, fallbackFound = 0;
+
+        for (LimelightHiveTracker.Tag t : tracker.recognize()) {
+            if (Double.isNaN(t.rangeIn)) continue;
+            if (t.cell == primary) {
+                primarySum += t.rangeIn;
+                primaryFound++;
+            } else if (t.cell == fallback) {
+                fallbackSum += t.rangeIn;
+                fallbackFound++;
+            }
+        }
+
+        if (primaryFound > 0) return primarySum / primaryFound;
+        if (fallbackFound > 0) return fallbackSum / fallbackFound;
+        return null;
+    }
+
     /**
      * How many members of our cluster the last bearing was averaged from, for telemetry.
      * Zero means none were in view. Worth showing: it says whether "aimed" was decided
@@ -428,6 +480,9 @@ public abstract class TankTeleOpBase extends LinearOpMode {
 
     /** Which side of our HIVE supplied the last bearing; null when none was in view. */
     private HiveGeometry.Cell lastAimCell = null;
+
+    private Double lastRangeIn = null;
+    private long lastRangeMs = 0L;
 
     /**
      * This frame's raw cluster mean, before smoothing -- the value that used to step

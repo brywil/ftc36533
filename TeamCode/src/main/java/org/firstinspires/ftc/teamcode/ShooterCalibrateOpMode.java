@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 
@@ -20,9 +19,14 @@ import java.util.Locale;
  *  2. Stand at a distance you care about (your closest shot, say). The range is read
  *     live from the tag, so you do not need a tape measure.
  *  3. Spin the launcher with X, feed a ball with the right bumper, and tune the wheel
- *     speed until shots land where you want. Because the launcher has an encoder, you
- *     are setting a real speed that holds regardless of battery -- unlike power.
- *  4. Press A to record {current range, current wheel speed} as a point.
+ *     speed until shots land where you want. The launcher has an encoder, so you are
+ *     setting a real speed -- but the loop can only hold it while the battery has
+ *     voltage headroom. If `actual` sits well below `asked`, charge the battery before
+ *     recording: a weak pack makes the wheel slower than the number you wrote down,
+ *     and those points will overshoot on a fresh one.
+ *  4. Press A to record {current range, current wheel speed, battery volts} as a
+ *     point. The volts matter: the same speed request needs more voltage as the
+ *     battery drains, and a table tuned on a weak battery overshoots when charged.
  *  5. Repeat at other distances -- three or four points from nearest to farthest.
  *  6. The table prints on the telemetry. Copy it into Shooter.RANGE_VELOCITY_TABLE.
  *
@@ -34,7 +38,6 @@ import java.util.Locale;
  *   A                record the current range and speed as a point
  *   B                clear all recorded points
  */
-@Disabled
 @TeleOp(name = "5. Shooter Calibrate", group = "Bringup")
 public class ShooterCalibrateOpMode extends LinearOpMode {
 
@@ -53,7 +56,7 @@ public class ShooterCalibrateOpMode extends LinearOpMode {
         LimelightHiveTracker tracker =
                 new LimelightHiveTracker(hardwareMap, LIMELIGHT_NAME, FIDUCIAL_PIPELINE);
 
-        // Recorded points, as {inches, ticks per second}. Sorted only when printed.
+        // Recorded points, as {inches, ticks per second, battery volts}. Sorted only when printed.
         List<double[]> points = new ArrayList<>();
 
         double velocity = ShooterControls.DEFAULT_MANUAL_VELOCITY;   // where the wheel is known to land
@@ -96,7 +99,7 @@ public class ShooterCalibrateOpMode extends LinearOpMode {
                 if (rangeIn == null) {
                     telemetry.addLine("Cannot record: no tag in view for a range.");
                 } else {
-                    points.add(new double[] { rangeIn, velocity });
+                    points.add(new double[] { rangeIn, velocity, shooter.getBatteryVoltage() });
                 }
             }
             if (gamepad1.b && !bPrev) points.clear();
@@ -107,17 +110,27 @@ public class ShooterCalibrateOpMode extends LinearOpMode {
                     ? "no tag in view" : String.format(Locale.US, "%.1f in", rangeIn));
             telemetry.addData("wheel speed", "%.0f ticks/s asked, %.0f actual %s",
                     velocity, shooter.getVelocity(), spinning ? "(spinning)" : "(stopped)");
+            if (spinning && velocity > 0 && shooter.getVelocity() < velocity * 0.95) {
+                telemetry.addLine("WHEEL CANNOT REACH asked -- charge the battery; do not record");
+            }
+            telemetry.addData("battery", Double.isNaN(shooter.getBatteryVoltage())
+                    ? "no sensor" : String.format(Locale.US, "%.1f V", shooter.getBatteryVoltage()));
             telemetry.addData("feed", gamepad1.right_bumper ? "RUNNING" : "off");
             telemetry.addLine();
             telemetry.addData("points recorded", points.size());
 
-            // Print the table sorted nearest-first, ready to paste.
+            // Print the table sorted nearest-first, ready to paste. The battery voltage
+            // rides along as a comment so the table records what charge it was tuned at;
+            // the runtime only reads columns 0 and 1.
             List<double[]> sorted = new ArrayList<>(points);
             sorted.sort((p, q) -> Double.compare(p[0], q[0]));
             telemetry.addLine("--- paste into Shooter.RANGE_VELOCITY_TABLE ---");
+            telemetry.addLine("// Measured at the battery voltage shown on each row.");
             telemetry.addLine("public static final double[][] RANGE_VELOCITY_TABLE = {");
             for (double[] p : sorted) {
-                telemetry.addLine(String.format(Locale.US, "    { %.1f, %.0f },", p[0], p[1]));
+                telemetry.addLine(Double.isNaN(p[2])
+                        ? String.format(Locale.US, "    { %.1f, %.0f },", p[0], p[1])
+                        : String.format(Locale.US, "    { %.1f, %.0f },   // %.1f V", p[0], p[1], p[2]));
             }
             telemetry.addLine("};");
             telemetry.addLine();

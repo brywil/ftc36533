@@ -44,6 +44,15 @@ public class ShooterControls {
     private boolean manual = false;
     private double manualVelocity = DEFAULT_MANUAL_VELOCITY;
 
+    /**
+     * Trim added to the table's AUTO speed, ticks/s. Lets the driver walk the speed up
+     * or down WITHOUT leaving AUTO, so it works while a tag is in view -- which is
+     * exactly when the table is in charge and the plain manual dpad was being ignored.
+     * The effective speed (table + trim) is what telemetry shows, so it can be written
+     * back into the table as a measured point.
+     */
+    private double autoTrimVelocity = 0.0;
+
     /** The range last seen by update(), for telemetry. NaN when there was none. */
     private double lastRangeIn = Double.NaN;
 
@@ -80,6 +89,19 @@ public class ShooterControls {
         manualVelocity = Math.max(0.0, manualVelocity + delta);
     }
 
+    /**
+     * Trim the AUTO (table) speed by delta ticks/s, without leaving AUTO. This is how
+     * the dpad keeps working while the Limelight has a tag: the table still sets the
+     * range-based speed, and this corrects it from what the driver sees.
+     */
+    public void nudgeAutoTrim(double delta) { autoTrimVelocity += delta; }
+
+    /** Trim currently applied to the table speed, ticks/s. */
+    public double getAutoTrimVelocity() { return autoTrimVelocity; }
+
+    /** Drop the trim, e.g. when starting a new calibration or after pasting it in. */
+    public void clearAutoTrim() { autoTrimVelocity = 0.0; }
+
     // --- per-loop update ----------------------------------------------------
 
     /**
@@ -98,8 +120,10 @@ public class ShooterControls {
             targetVelocity = manualVelocity;
         } else if (rangeIn != null) {
             Double fromTable = shooter.rangeToVelocity(rangeIn);
-            // null means the table has too few measured points -- do not guess.
-            targetVelocity = (fromTable == null) ? 0.0 : fromTable;
+            // null means the table has too few measured points -- do not guess. The trim
+            // cannot invent a speed, so it only applies when the table answered.
+            targetVelocity = (fromTable == null)
+                    ? 0.0 : Math.max(0.0, fromTable + autoTrimVelocity);
         } else {
             targetVelocity = 0.0;   // AUTO with no range: refuse rather than guess
         }
