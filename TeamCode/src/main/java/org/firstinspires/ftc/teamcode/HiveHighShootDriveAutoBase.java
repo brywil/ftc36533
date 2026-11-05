@@ -117,6 +117,8 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
         // the very end, so it is already at speed whenever the HIVE reaches HIGH.
         shooter.setManual(true);
         shooter.setArmed(true);
+        // Pin this auto's own speed; otherwise it inherits the teleop's default.
+        shooter.setManualVelocity(LAUNCH_VELOCITY);
         shooter.update(null);
 
         boolean high = waitForHigh();

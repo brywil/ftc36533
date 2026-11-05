@@ -216,6 +216,9 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         // --- 1-3: spin up, wait for at-speed, feed ---
         shooter.setManual(true);
         shooter.setArmed(true);
+        // Pin this auto's own speed. Without this it would inherit the teleop's
+        // DEFAULT_MANUAL_VELOCITY, so lowering the teleop base would change the auto too.
+        shooter.setManualVelocity(LAUNCH_VELOCITY);
         shooter.update(null);            // manual: command the manual speed now
 
         long spinBegin = System.currentTimeMillis();

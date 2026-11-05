@@ -2,6 +2,9 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
+import android.content.Context;
+import android.content.SharedPreferences;
+
 import java.util.Locale;
 
 /**
@@ -89,6 +92,11 @@ public abstract class TankTeleOpBase extends LinearOpMode {
     /** Must match the Robot Configuration name of the Limelight. */
     private static final String LIMELIGHT_NAME = "limelight";
 
+    /** Where the driver's last shooter tuning is kept between OpMode runs. */
+    private static final String PREFS = "shooter-settings";
+    private static final String KEY_MANUAL_VELOCITY = "manualVelocity";
+    private static final String KEY_AUTO_TRIM = "autoTrim";
+
     /** The fiducial (AprilTag) pipeline you configured on the camera. */
     private static final int FIDUCIAL_PIPELINE = 1;
 
@@ -160,6 +168,16 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         shooter.setManual(true);
         shooter.setArmed(true);
 
+        // Restore the driver's last saved shooter tuning. A new ShooterControls starts at
+        // the code default every run, so without this the dpad tuning is lost when the
+        // OpMode ends.
+        SharedPreferences prefs = hardwareMap.appContext
+                .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        shooter.setManualVelocity(prefs.getFloat(KEY_MANUAL_VELOCITY,
+                (float) shooter.getManualVelocity()));
+        shooter.setAutoTrim(prefs.getFloat(KEY_AUTO_TRIM,
+                (float) shooter.getAutoTrimVelocity()));
+
         boolean upPrev = false, downPrev = false;
         boolean aimHeldPrev = false;
         boolean aimedThisHold = false;
@@ -173,6 +191,8 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         telemetry.addData("limelight", aimAvailable ? "OK" : "MISSING -- aim disabled");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
+        telemetry.addData("shooter base (saved)", "%.0f ticks/s  trim %+.0f",
+                shooter.getManualVelocity(), shooter.getAutoTrimVelocity());
         telemetry.update();
 
         // Learn the sticks' rest position while waiting for START (sticks centred).
@@ -309,6 +329,11 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             if (dpadDelta != 0.0) {
                 if (useAuto) shooter.nudgeAutoTrim(dpadDelta);
                 else shooter.nudgeManualVelocity(dpadDelta);
+                // Remember it for the next run, whichever mode the driver tuned in.
+                prefs.edit()
+                        .putFloat(KEY_MANUAL_VELOCITY, (float) shooter.getManualVelocity())
+                        .putFloat(KEY_AUTO_TRIM, (float) shooter.getAutoTrimVelocity())
+                        .apply();
             }
 
             shooter.setManual(!useAuto);

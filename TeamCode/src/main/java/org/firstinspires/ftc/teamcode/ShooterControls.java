@@ -31,9 +31,10 @@ package org.firstinspires.ftc.teamcode;
 public class ShooterControls {
 
     /**
-     * Starting manual velocity, and the step the tune buttons move it by. 1300 is what
-     * "2. Tank TeleOp" was tuned to on 2026-10-15 -- shots landed there and the wheel
-     * measured at speed -- so the driver starts where it was tuned rather than 50 low.
+     * Starting manual velocity, and the step the tune buttons move it by. This is the
+     * TELEOP's base speed on a first run; after that the teleop loads the driver's last
+     * saved value. Autonomous pins its own LAUNCH_VELOCITY, so this does not change an
+     * auto.
      */
     public static final double DEFAULT_MANUAL_VELOCITY = 1300.0;
     public static final double MANUAL_STEP = 25.0;
@@ -98,6 +99,9 @@ public class ShooterControls {
 
     /** Trim currently applied to the table speed, ticks/s. */
     public double getAutoTrimVelocity() { return autoTrimVelocity; }
+
+    /** Set the AUTO trim directly -- e.g. restoring the driver's saved setting. */
+    public void setAutoTrim(double trim) { autoTrimVelocity = trim; }
 
     /** Drop the trim, e.g. when starting a new calibration or after pasting it in. */
     public void clearAutoTrim() { autoTrimVelocity = 0.0; }
