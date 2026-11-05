@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 
 /**
  * Autonomous for the RED alliance: one square forward, aim at the RED goal, shoot.
@@ -11,6 +12,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
  *
  * RED_FAR is the "RED SCORING" cluster, ids 30-33 (HiveGeometry.Cell).
  */
+@Disabled
 @Autonomous(name = "9red. Auto: 2 Squares, Aim, Shoot, Park", group = "Auto")
 public class ForwardOneAimAndShootAutoRed extends ForwardOneAimAndShootAutoBase {
     @Override

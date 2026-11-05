@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 
 /**
  * Autonomous for the BLUE alliance: one square forward, aim at the BLUE goal, shoot.
@@ -11,6 +12,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
  *
  * BLUE_FAR is the "BLUE SCORING" cluster, ids 42-45 (HiveGeometry.Cell).
  */
+@Disabled
 @Autonomous(name = "9blue. Auto: 2 Squares, Aim, Shoot, Park", group = "Auto")
 public class ForwardOneAimAndShootAutoBlue extends ForwardOneAimAndShootAutoBase {
     @Override

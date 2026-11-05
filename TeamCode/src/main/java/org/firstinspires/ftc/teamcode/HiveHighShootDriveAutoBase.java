@@ -11,14 +11,26 @@ import java.util.Locale;
  *
  * THIS FILE IS NOT AN OPMODE. {@link HiveHighShootDriveAutoRed} and
  * {@link HiveHighShootDriveAutoBlue} are the OpModes; the only thing they decide is
- * which cluster of tags is our scoring CELL (RED_FAR or BLUE_FAR).
+ * which cluster of tags is the CELL this robot scores into.
  *
- * WHY WAIT AT ALL. The HIVE is a seesaw that only rests at two endpoints. "It reaches HIGH"
- * means our CELL's tag plane has tipped to the HIGH slot and settled there -- the
- * Limelight reports that as a settled observation in {@link HiveGeometry.Slot.HIGH}.
- * Feeding before it gets there throws at a moving target. So this waits for that exact
- * condition, using the very same gate as {@link LimelightHiveTracker} / {@link HiveGate}
- * (tilt AND height agreeing), not a guess from a single angle.
+ * RED AND BLUE WATCH DIFFERENT-NAMED CELLS, AND THAT IS CORRECT. The field is
+ * point-symmetric, not mirrored, so the HIVE is staged the opposite way round for each
+ * alliance: RED starts with its AUDIENCE-side CELL up, BLUE starts with its REAR/scoring
+ * side up (manual Fig 10-2). The partner tips it after START, so:
+ *
+ *   RED  support robot (on the rear side)  waits for RED SCORING (30-33) to come UP;
+ *   BLUE support robot (on the audience side) waits for BLUE AUDIENCE (38-41) to come UP.
+ *
+ * Watching the same side for both alliances would make one of them fire at the staged
+ * pose, before any tip, at the wrong CELL.
+ *
+ * WHY WAIT AT ALL. The HIVE is a seesaw that only rests at two endpoints. A TIP is the
+ * down-CELL becoming the up-CELL and settling there -- the Limelight reports that as a
+ * settled observation in {@link HiveGeometry.Slot.HIGH}. Feeding before it gets there
+ * throws at a moving target. This waits for that exact transition, using the very same
+ * gate as {@link LimelightHiveTracker} / {@link HiveGate} (tilt AND height agreeing), and
+ * requires the CELL to have been seen settled LOW first, so a strange initial state
+ * cannot be mistaken for a tip.
  *
  * IF IT NEVER HAPPENS. It waits up to WAIT_FOR_HIGH_MS (20 s); when that runs out it
  * SKIPS the feed and does the movement anyway, so the robot still leaves. A HIVE that
@@ -27,7 +39,7 @@ import java.util.Locale;
  *
  * SEQUENCE, on START:
  *   1. spin the launcher up and KEEP it spinning for the whole OpMode;
- *   2. wait for our CELL to be SETTLED in the HIGH slot, up to 20 s;
+ *   2. wait for our CELL to go SETTLED LOW -> SETTLED HIGH (a TIP), up to 20 s;
  *   3. when it reaches HIGH: run the intake AND the indexer (windmill) for FEED_DURATION_MS;
  *   4. drive at MOVEMENT_POWER: forward 0.5, RIGHT 90, forward 2, then reverse 0.2;
  *   5. stop and report.
@@ -51,7 +63,7 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
 
     // --- Shooting -------------------------------------------------------------
 
-    public static final double LAUNCH_VELOCITY = 1275.0;
+    public static final double LAUNCH_VELOCITY = 1300.0;
     public static final long FEED_DURATION_MS = 5000;
     public static final double FEED_INTAKE_POWER = 1.0;
 
@@ -152,7 +164,7 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
         shooter.stop();
         tracker.close();
 
-        telemetry.addData("HIVE HIGH", high ? "yes" : "no -- feed skipped");
+        telemetry.addData("TIP seen", high ? "yes" : "no -- feed skipped");
         telemetry.addData("feed", fed ? "fed 5 s" : "not fed");
         telemetry.addData("forward 0.5", fwd1);
         telemetry.addData("turn right 90", turnR);
@@ -163,11 +175,17 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
     }
 
     /**
-     * Wait until our scoring CELL is settled in the HIGH slot, or WAIT_FOR_HIGH_MS
-     * passes. Returns true if it got there.
+     * Wait until our target CELL has gone from settled LOW to settled HIGH -- the TIP --
+     * or WAIT_FOR_HIGH_MS passes. Returns true if a full tip was seen.
+     *
+     * REQUIRING LOW FIRST IS THE POINT. Firing on "HIGH" alone would fire on the staged
+     * pose for whichever alliance starts with that CELL up, before any tip happened. The
+     * partner tips the HIVE after START and the robot scores into the CELL that comes UP,
+     * so seeing it DOWN first proves the tip really occurred.
      */
     private boolean waitForHigh() {
         long begin = System.currentTimeMillis();
+        boolean sawLow = false;
         while (opModeIsActive()) {
             long elapsed = System.currentTimeMillis() - begin;
 
@@ -178,13 +196,17 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
                 if (o.cell != scoringCell()) continue;
                 lastSeen = String.format(Locale.US, "tilt %+.1f  slot %s  %s",
                         o.tiltDeg, o.slot, o.settled ? "settled" : "moving");
-                if (o.settled && o.slot == HiveGeometry.Slot.HIGH) {
+                if (o.settled && o.slot == HiveGeometry.Slot.LOW) {
+                    sawLow = true;
+                }
+                if (o.settled && o.slot == HiveGeometry.Slot.HIGH && sawLow) {
                     found = true;
                     break;
                 }
             }
 
-            telemetry.addData("waiting for HIGH", "%d / %d ms", elapsed, WAIT_FOR_HIGH_MS);
+            telemetry.addData("waiting for TIP", "%d / %d ms  (seen LOW: %s)",
+                    elapsed, WAIT_FOR_HIGH_MS, sawLow ? "yes" : "not yet");
             telemetry.addData("  " + scoringCell().clusterName, lastSeen);
             telemetry.update();
 

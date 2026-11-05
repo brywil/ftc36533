@@ -35,7 +35,7 @@ public class ShooterControls {
      * "2. Tank TeleOp" was tuned to on 2026-10-15 -- shots landed there and the wheel
      * measured at speed -- so the driver starts where it was tuned rather than 50 low.
      */
-    public static final double DEFAULT_MANUAL_VELOCITY = 1275.0;
+    public static final double DEFAULT_MANUAL_VELOCITY = 1300.0;
     public static final double MANUAL_STEP = 25.0;
 
     private final Shooter shooter;

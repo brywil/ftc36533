@@ -2,10 +2,12 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
+import java.util.Locale;
+
 /**
  * Shoot from where the robot already is, then drive: forward 1 square, left 90,
- * forward 1 square, right 90, forward 2.5 squares, left 90, forward 1 square, then
- * back up 0.2 squares.
+ * forward 1 square, right 90, forward 2.1 squares, left 90, forward 1 square, then
+ * back up 0.1 squares.
  *
  * THIS FILE IS NOT AN OPMODE. It holds the whole routine; {@link ShootThenDriveAutoBlue}
  * and {@link ShootThenDriveAutoRed} are the OpModes you pick on the Driver Station, and
@@ -30,16 +32,16 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  *   BLUE: tile D6, against the REAR wall, facing the audience (toward the blue hive) --
  *         the blue circle in Figure 11-1, where this run was tested.
  *         fwd 1 -> D5; left -> facing the right wall; fwd 1 -> E5; right -> facing the
- *         audience; fwd 2.5 -> E2.5; left; fwd 1, back 0.2 -> on the right wall at about
- *         row 2.5, in the blue LOADING ZONE (F2).
+ *         audience; fwd 2.1 -> E2.1; left; fwd 1, back 0.1 -> on the right wall in the
+ *         blue LOADING ZONE (F2).
  *
  *   RED:  tile C1, against the AUDIENCE wall, facing the rear (toward the red hive) --
  *         blue's start turned 180 degrees; the red square at C1 in Figure 11-1.
  *         fwd 1 -> C2; left -> facing the left wall; fwd 1 -> B2; right -> facing the
- *         rear; fwd 2.5 -> B4.5; left; fwd 1, back 0.2 -> on the left wall at about
- *         row 4.5, in the red LOADING ZONE (A5).
+ *         rear; fwd 2.1 -> B4.1; left; fwd 1, back 0.1 -> on the left wall in the red
+ *         LOADING ZONE (A5).
  *
- * (The mirrored red path from C6 would end on the left wall around A2.5 -- at the red
+ * (The mirrored red path from C6 would end on the left wall around A2.0 -- at the red
  * side's FLOWER, three tiles from the red LOADING ZONE.)
  *
  * NO AIMING. This OpMode assumes the robot is already lined up on the goal when START
@@ -50,11 +52,13 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * SEQUENCE, on START:
  *   1. ask the launcher for LAUNCH_VELOCITY immediately;
  *   2. wait for the encoder to REPORT the wheel actually at speed, capped so a broken
- *      wheel cannot hang the OpMode;
- *   3. feed for FEED_DURATION_MS (5 s), with the intake running so a ball touching it
- *      still gets pulled in;
- *   4. drive at 50% power: forward 1, left 90, forward 1, right 90, forward 2.5,
- *      left 90, forward 1, then reverse 0.2;
+ *      wheel cannot hang the OpMode, then hold that speed for SETTLE_AFTER_SPINUP_MS;
+ *   3. feed with the intake running: the first three pulses are short stutters with a
+ *      recovery wait between them, then the windmill runs continuously for the rest of
+ *      FEED_MAX_MS -- the stutters keep the first shots consistent, the continuous run
+ *      clears the rest of the hopper;
+ *   4. drive at 50% power: forward 1, left 90, forward 1, right 90, forward 2.1,
+ *      left 90, forward 1, then reverse 0.1;
  *   5. stop and report.
  *
  * The drive is plain dead reckoning with {@link ForwardAndTurnAuto}'s measured
@@ -80,7 +84,7 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
     // --- Shooting -----------------------------------------------------------
 
     /** Launcher wheel speed for the shot, ticks/s. Same as the other autos. */
-    public static final double LAUNCH_VELOCITY = 1275.0;
+    public static final double LAUNCH_VELOCITY = 1300.0;
 
     /**
      * Cap on waiting for the wheel to report at-speed before feeding anyway. Raised
@@ -91,8 +95,40 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
      */
     public static final long SPIN_UP_MAX_WAIT_MS = 5000;
 
-    /** How long to run the windmill, pushing balls into the wheel. */
-    public static final long FEED_DURATION_MS = 5000;
+    /**
+     * Hold the wheel at speed for this long after it reports spun up, before any ball is
+     * fed. The velocity loop can still be ringing when it first crosses the target, so
+     * this lets it settle -- and gives every run the same starting point.
+     */
+    public static final long SETTLE_AFTER_SPINUP_MS = 2000;
+
+    /**
+     * How long the whole feed phase may run before the robot moves on. The first
+     * {@link #FEED_SMALL_PULSE_COUNT} pulses are short stutters with recovery between
+     * them; after that the windmill runs continuously for the rest of this time. 12 s
+     * leaves room for the drive inside the 30 s AUTO -- raise it only if the drive is
+     * comfortably faster than that.
+     */
+    public static final long FEED_MAX_MS = 12000;
+
+    /** How many short starter pulses before the windmill goes continuous. */
+    public static final int FEED_SMALL_PULSE_COUNT = 3;
+
+    /** On-time of each starter pulse. Kept short so the first balls feed gently. */
+    public static final long FEED_SMALL_PULSE_ON_MS = 120;
+
+    /** Minimum gap with the windmill off between starter pulses. */
+    public static final long FEED_SMALL_PULSE_OFF_MS = 200;
+
+    /**
+     * After a pulse, wait until the wheel is back to this fraction of the speed we asked
+     * for before feeding again. 0.95 leaves room for the velocity loop's small steady
+     * error, so normal running is not treated as "not recovered".
+     */
+    public static final double FEED_RECOVER_FRACTION = 0.95;
+
+    /** Cap on the recovery wait, so a weak battery cannot stall the auto in the feed phase. */
+    public static final long FEED_RECOVER_MAX_MS = 1500;
 
     /**
      * Run the intake while feeding, at this power. The windmill pushes balls in from
@@ -107,11 +143,11 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
     /** The four forward legs, in squares, in drive order. */
     public static final double FORWARD_1_SQUARES = 1.0;
     public static final double FORWARD_2_SQUARES = 1.0;
-    public static final double FORWARD_3_SQUARES = 2.5;
+    public static final double FORWARD_3_SQUARES = 2.1;
     public static final double FORWARD_4_SQUARES = 1.0;
 
     /** Reverse this many squares at the very end. */
-    public static final double BACKWARD_FINAL_SQUARES = 0.2;
+    public static final double BACKWARD_FINAL_SQUARES = 0.1;
 
     /** How far each turn goes, in degrees. */
     public static final double TURN_DEG = 90.0;
@@ -135,6 +171,9 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
     private ShooterControls shooter;
     private double ticksPerInch;
 
+    /** CSV of this run, for checking power/rate afterwards. Null-safe when it cannot open. */
+    private TeamRunLog log;
+
     @Override
     public void runOpMode() {
         drive = new TankDrivebase(hardwareMap);
@@ -144,8 +183,19 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         ticksPerInch = ForwardAndTurnAuto.TICKS_PER_WHEEL_REV
                 / (Math.PI * ForwardAndTurnAuto.WHEEL_DIAMETER_IN);
 
+        // A file, not just the screen: the power/rate can be checked after the run.
+        log = TeamRunLog.open(hardwareMap.appContext,
+                "shoot-then-drive-" + (alliance() == HiveGeometry.Alliance.RED ? "red" : "blue"));
+        log.row("elapsed_ms", "event", "detail", "commanded", "actual", "power",
+                "left_ticks", "right_ticks", "left_rate", "right_rate");
+        log.row("", "config", "alliance=" + alliance()
+                        + " launch=" + num(LAUNCH_VELOCITY)
+                        + " move_power=" + num(MOVEMENT_POWER)
+                        + " battery=" + num(shooter.shooter().getBatteryVoltage()),
+                "", "", "", "", "", "", "");
+
         telemetry.addData("alliance", alliance());
-        telemetry.addLine("Auto: shoot (no aim), then fwd 1, left 90, fwd 1, right 90, fwd 2.5, left 90, fwd 1.");
+        telemetry.addLine("Auto: shoot (no aim), then fwd 1, left 90, fwd 1, right 90, fwd 2.1, left 90, fwd 1.");
         if (alliance() == HiveGeometry.Alliance.RED) {
             telemetry.addLine("RED START: tile C1, against the AUDIENCE wall, facing the red hive.");
         } else {
@@ -156,6 +206,8 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
         telemetry.addData("movement power", "%.0f%%", MOVEMENT_POWER * 100);
+        telemetry.addData("log", log.isOpen() ? log.path() : "OFF -- could not open");
+        telemetry.addLine("Pull with: adb pull " + TeamRunLog.folderOnHub() + " .");
         telemetry.update();
 
         waitForStart();
@@ -171,9 +223,14 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         while (opModeIsActive()) {
             ready = shooter.isSpunUp();
             long waited = System.currentTimeMillis() - spinBegin;
-            telemetry.addData("spinning up launcher", "%.0f / %.0f ticks/s  (%d ms)",
-                    shooter.getVelocity(), shooter.getCommandedVelocity(), waited);
+            telemetry.addData("spinning up launcher",
+                    "asked %.0f  actual %.0f ticks/s  power %+.2f  (%d ms)",
+                    shooter.getCommandedVelocity(), shooter.getVelocity(),
+                    shooter.shooter().getLauncherPower(), waited);
             telemetry.update();
+            log.row(waited, "spinup", ready ? "ready" : "",
+                    num(shooter.getCommandedVelocity()), num(shooter.getVelocity()),
+                    num(shooter.shooter().getLauncherPower()), "", "", "", "");
             if (ready || waited >= SPIN_UP_MAX_WAIT_MS) break;
             idle();
         }
@@ -182,16 +239,84 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
                 ? "yes" : "NO -- timed out, check battery / encoder cable");
         telemetry.update();
 
-        // Feed for FEED_DURATION_MS, with the intake running too. The intake pulls
-        // from the field and can free a ball resting against it, while the windmill
-        // pushes into the wheel.
-        shooter.shooter().setFeed(1.0);
+        // Hold the wheel at speed before the first ball. The velocity loop can still be
+        // ringing as it first crosses the target; feeding immediately can give a different
+        // first shot on every run. Keep the launcher commanded the whole time.
+        long settleBegin = System.currentTimeMillis();
+        while (opModeIsActive()
+                && System.currentTimeMillis() - settleBegin < SETTLE_AFTER_SPINUP_MS) {
+            long waited = System.currentTimeMillis() - settleBegin;
+            telemetry.addData("settling before feed", "%d / %d ms",
+                    waited, SETTLE_AFTER_SPINUP_MS);
+            telemetry.addData("  launcher", "asked %.0f  actual %.0f ticks/s  power %+.2f",
+                    shooter.getCommandedVelocity(), shooter.getVelocity(),
+                    shooter.shooter().getLauncherPower());
+            telemetry.update();
+            log.row(waited, "settle", "", num(shooter.getCommandedVelocity()),
+                    num(shooter.getVelocity()),
+                    num(shooter.shooter().getLauncherPower()), "", "", "", "");
+            idle();
+        }
+
+        // The first few balls are short stutters: pulse, stop, let the wheel recover, pulse
+        // again. That keeps those shots at the same speed instead of shoving a ball in
+        // while the wheel is still down. After the starter pulses the windmill runs
+        // continuously for the rest of the phase to clear the hopper.
         intake.setPower(FEED_INTAKE_POWER);
         long feedBegin = System.currentTimeMillis();
-        while (opModeIsActive() && System.currentTimeMillis() - feedBegin < FEED_DURATION_MS) {
-            telemetry.addData("feeding", "%d / %d ms  (intake on)",
-                    (int) (System.currentTimeMillis() - feedBegin), FEED_DURATION_MS);
+        long phaseBegin = feedBegin;
+        int pulsesDone = 0;
+        boolean pulsing = true;
+        boolean continuous = false;
+        shooter.shooter().setFeed(1.0);
+
+        while (opModeIsActive()) {
+            long now = System.currentTimeMillis();
+            long fed = now - feedBegin;
+            if (fed >= FEED_MAX_MS) break;
+
+            long phase = now - phaseBegin;
+            double asked = shooter.getCommandedVelocity();
+            double actual = shooter.getVelocity();
+            boolean recovered = asked > 0 && actual >= asked * FEED_RECOVER_FRACTION;
+
+            if (!continuous) {
+                if (pulsing) {
+                    if (phase >= FEED_SMALL_PULSE_ON_MS) {
+                        pulsing = false;
+                        phaseBegin = now;
+                        pulsesDone++;
+                        shooter.shooter().setFeed(0.0);
+                    }
+                } else if (phase >= FEED_SMALL_PULSE_OFF_MS
+                        && (recovered || phase >= FEED_RECOVER_MAX_MS)) {
+                    if (pulsesDone >= FEED_SMALL_PULSE_COUNT) {
+                        continuous = true;
+                        shooter.shooter().setFeed(1.0);
+                    } else {
+                        pulsing = true;
+                        phaseBegin = now;
+                        shooter.shooter().setFeed(1.0);
+                    }
+                }
+            }
+
+            String state = continuous ? "CONTINUOUS"
+                    : pulsing ? "stutter " + pulsesDone + "/" + FEED_SMALL_PULSE_COUNT
+                    : (recovered ? "recovered" : "recovering");
+            telemetry.addData("feed phase", "%d / %d ms  %s  (intake on)",
+                    fed, FEED_MAX_MS, state);
+            telemetry.addData("  launcher", "asked %.0f  actual %.0f ticks/s  power %+.2f  %s",
+                    asked, actual, shooter.shooter().getLauncherPower(),
+                    shooter.isSpunUp() ? "READY" : "SLOW");
+            if (asked > 0 && actual < asked * 0.90
+                    && shooter.shooter().getLauncherPower() > 0.95) {
+                telemetry.addLine("LAUNCHER SATURATED -- battery cannot hold the speed");
+            }
             telemetry.update();
+            log.row(fed, continuous ? "feed-cont" : (pulsing ? "feed-on" : "feed-off"), state,
+                    num(asked), num(actual),
+                    num(shooter.shooter().getLauncherPower()), "", "", "", "");
             idle();
         }
         shooter.shooter().setFeed(0.0);
@@ -206,10 +331,10 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
             turnL = turn("after: turn left 90", TURN_LEFT_SIGN);
             fwd2 = driveForward("after: forward 1", FORWARD_2_SQUARES);
             turnR1 = turn("after: turn right 90", TURN_RIGHT_SIGN);
-            fwd3 = driveForward("after: forward 2.5", FORWARD_3_SQUARES);
+            fwd3 = driveForward("after: forward 2.1", FORWARD_3_SQUARES);
             turnL2 = turn("after: turn left 90", TURN_LEFT_SIGN);
             fwd4 = driveForward("after: forward 1", FORWARD_4_SQUARES);
-            lastBack = driveBackward("after: backward 0.2", BACKWARD_FINAL_SQUARES);
+            lastBack = driveBackward("after: backward 0.1", BACKWARD_FINAL_SQUARES);
         }
 
         drive.stop();
@@ -220,11 +345,26 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         telemetry.addData("turn left 90", turnL);
         telemetry.addData("forward 1", fwd2);
         telemetry.addData("turn right 90", turnR1);
-        telemetry.addData("forward 2.5", fwd3);
+        telemetry.addData("forward 2.1", fwd3);
         telemetry.addData("turn left 90", turnL2);
         telemetry.addData("forward 1", fwd4);
-        telemetry.addData("backward 0.2", lastBack);
+        telemetry.addData("backward 0.1", lastBack);
         telemetry.update();
+
+        // Keep the row-by-row data on the Hub after the OpMode ends.
+        log.row("", "result", "launch=" + (ready ? "fired" : "no-speed"), "", "", "", "", "", "", "");
+        log.row("", "result", "forward 1=" + fwd1, "", "", "", "", "", "", "");
+        log.row("", "result", "turn left 90=" + turnL, "", "", "", "", "", "", "");
+        log.row("", "result", "forward 1=" + fwd2, "", "", "", "", "", "", "");
+        log.row("", "result", "turn right 90=" + turnR1, "", "", "", "", "", "", "");
+        log.row("", "result", "forward 2.1=" + fwd3, "", "", "", "", "", "", "");
+        log.row("", "result", "turn left 90=" + turnL2, "", "", "", "", "", "", "");
+        log.row("", "result", "forward 1=" + fwd4, "", "", "", "", "", "", "");
+        log.row("", "result", "backward 0.1=" + lastBack, "", "", "", "", "", "", "");
+        log.row("", "file", log.path() == null ? "no file" : log.path(),
+                "", "", "", "", "", "", "");
+        log.close();
+
         sleep(2000);
     }
 
@@ -279,10 +419,17 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
             boolean encodersDead = elapsed > ENCODER_STARTUP_GRACE_MS
                     && (leftDead || rightDead);
 
+            double leftRate = elapsed > 0 ? leftMoved * 1000.0 / elapsed : 0.0;
+            double rightRate = elapsed > 0 ? rightMoved * 1000.0 / elapsed : 0.0;
+
             telemetry.addData("move", label);
             telemetry.addData("  left", "%d / %d ticks", leftMoved, leftDelta);
             telemetry.addData("  right", "%d / %d ticks", rightMoved, rightDelta);
+            telemetry.addData("  power", "%.0f%%  rate L %.0f / R %.0f ticks/s",
+                    power * 100.0, leftRate, rightRate);
             telemetry.update();
+            log.row(elapsed, "move", label, "", "", num(power),
+                    leftMoved, rightMoved, num(leftRate), num(rightRate));
 
             if (encodersDead) {
                 drive.stop();
@@ -314,5 +461,10 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         return (value == Math.floor(value))
                 ? String.valueOf((long) value)
                 : String.valueOf(value);
+    }
+
+    /** One number for a CSV cell: fixed decimal point, never a locale comma. */
+    private static String num(double value) {
+        return String.format(Locale.US, "%.2f", value);
     }
 }

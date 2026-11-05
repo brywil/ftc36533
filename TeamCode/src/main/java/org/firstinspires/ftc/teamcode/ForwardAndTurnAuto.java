@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /**
@@ -56,6 +57,7 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * side's encoder stops counting altogether, the move is stopped early instead of
  * waiting out the timeout, because no amount of driving will ever "arrive".
  */
+@Disabled
 @Autonomous(name = "8. Auto: 2 Squares, Turn 90, Launch", group = "Auto")
 public class ForwardAndTurnAuto extends LinearOpMode {
 
@@ -122,16 +124,15 @@ public class ForwardAndTurnAuto extends LinearOpMode {
 
     /**
      * Launcher wheel speed for the shot, in encoder ticks per second. This is the
-     * SAME kind of number the distance->speed table holds. 1275 is one manual step
-     * below the 1300 that was found to overshoot, and matches the table in
-     * {@link Shooter}. Tune in steps and watch the shot, not the number.
+     * SAME kind of number the distance->speed table holds. 1300 is the shared auto
+     * launch speed; tune in 25-tick steps and watch the shot, not the number.
      *
      * WATCH OUT: this is a closed-loop target. If the wheel cannot actually reach it
      * (weak battery, or too high a value), the spin-up wait below times out and the
      * telemetry says "launcher at speed: NO" -- that means the speed is above what the
      * motor can hold, not that the code is broken.
      */
-    public static final double LAUNCH_VELOCITY = 1275.0;
+    public static final double LAUNCH_VELOCITY = 1300.0;
 
     /** Let the chassis stop rocking after the turn before feeding, so the shot is straight. */
     public static final long SETTLE_AFTER_TURN_MS = 500;

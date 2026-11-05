@@ -161,6 +161,16 @@ public class Shooter {
     public double getCommandedVelocity() { return commandedVelocity; }
 
     /**
+     * The power the motor controller is actually applying to the launcher, -1..1.
+     *
+     * This is the controller's OUTPUT, not the number we asked for -- with a velocity
+     * loop it moves on its own to hold the speed. Useful when the wheel will not reach
+     * the asked speed: a power pinned near 1.0 means it is already giving everything the
+     * battery has, so the problem is voltage/load, not the request.
+     */
+    public double getLauncherPower() { return launcher == null ? 0.0 : launcher.getPower(); }
+
+    /**
      * Battery voltage in volts, or NaN when the hub reports none.
      *
      * This does NOT control anything. It is recorded with each calibration point so the

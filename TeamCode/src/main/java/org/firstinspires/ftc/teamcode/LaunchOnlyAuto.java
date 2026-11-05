@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 
 /**
@@ -26,15 +27,16 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
  * the whole time. If the wheel never reaches speed the telemetry says so and the shot
  * is thrown short -- check the launcher's encoder cable and the battery.
  */
+@Disabled
 @Autonomous(name = "10. Auto: Launch Only (lined up)", group = "Auto")
 public class LaunchOnlyAuto extends LinearOpMode {
 
     /**
      * Launcher wheel speed for the shot, in encoder ticks per second. Matches
-     * ForwardAndTurnAuto's value so the two autos shoot the same: 1275, one step below
-     * the 1300 that was found to overshoot. Tune by watching the ball, not the number.
+     * ForwardAndTurnAuto's value so the two autos shoot the same: 1300. Tune by
+     * watching the ball, not the number.
      */
-    public static final double LAUNCH_VELOCITY = 1275.0;
+    public static final double LAUNCH_VELOCITY = 1300.0;
 
     /**
      * Wait at most this long for the wheel to report at-speed before feeding anyway.
