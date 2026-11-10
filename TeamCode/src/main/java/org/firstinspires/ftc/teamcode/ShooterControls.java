@@ -39,11 +39,24 @@ public class ShooterControls {
     public static final double DEFAULT_MANUAL_VELOCITY = 1300.0;
     public static final double MANUAL_STEP = 25.0;
 
+    /** Full-power forward feed. Autonomous and anything that does not lower it uses this. */
+    public static final double FULL_FEED_POWER = 1.0;
+
+    /**
+     * Forward feed duty the TeleOp uses, 0..1. Half speed feeds balls more gently; the
+     * autonomous keeps FULL_FEED_POWER because its timing is tuned for full flow. Reverse
+     * is never scaled.
+     */
+    public static final double TELEOP_FEED_POWER = 0.5;
+
     private final Shooter shooter;
 
     private boolean armed = false;
     private boolean manual = false;
     private double manualVelocity = DEFAULT_MANUAL_VELOCITY;
+
+    /** Forward power granted by requestFeed(). Autonomous leaves this at full. */
+    private double forwardFeedPower = FULL_FEED_POWER;
 
     /**
      * Trim added to the table's AUTO speed, ticks/s. Lets the driver walk the speed up
@@ -149,6 +162,18 @@ public class ShooterControls {
     // --- feed ---------------------------------------------------------------
 
     /**
+     * Set the forward power used when requestFeed() grants a feed. TeleOp lowers this so
+     * balls feed gently; autonomous leaves it at {@link #FULL_FEED_POWER}. Reverse is not
+     * affected -- it is always full power.
+     */
+    public void setForwardFeedPower(double power) {
+        forwardFeedPower = Math.max(0.0, Math.min(1.0, power));
+    }
+
+    /** The forward power requestFeed() will use. */
+    public double getForwardFeedPower() { return forwardFeedPower; }
+
+    /**
      * Request a feed. Forward only STARTS on a wheel that is measured up to speed, so
      * a cold wheel never gets a ball; reverse (clearing a jam) always works.
      *
@@ -168,7 +193,7 @@ public class ShooterControls {
             boolean fastEnough = running
                     ? shooter.getVelocity() >= Shooter.MIN_LAUNCH_VELOCITY
                     : isSpunUp();
-            p = fastEnough ? 1.0 : 0.0;
+            p = fastEnough ? forwardFeedPower : 0.0;
         }
         feedPower = p;
         shooter.setFeed(p);

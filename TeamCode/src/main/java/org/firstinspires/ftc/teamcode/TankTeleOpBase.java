@@ -37,9 +37,9 @@ import java.util.Locale;
  *   left stick up/down    forward / back
  *   left stick left/right turn
  *   right stick left/right turn (same thing; either thumb works)
- *   right trigger         precision creep -- scales the DRIVER's inputs down for
- *                         lining up (it deliberately does not scale the aim's turn)
- *   RIGHT BUMPER          aims at our goal, runs the intake, AND fires -- see below
+ *   RIGHT BUMPER          auto-aim + shoot -- turns toward our goal tag, runs the
+ *                         intake, and feeds the windmill
+ *   right trigger         auto-aim only -- turns toward our goal tag, no intake or feed
  *   left bumper           intake (roller + servos) forward only, no aim, no fire
  *   square                intake ROLLER reverse + windmill reverse; servos stay still
  *                         (also cancels aim and fire while held)
@@ -50,20 +50,19 @@ import java.util.Locale;
  * range; when no usable range is in view for a moment, it falls back to the last
  * manual speed so a blink cannot stop the wheel.
  *
- * RIGHT BUMPER DOES THREE THINGS: it runs the intake, turns the robot toward our goal
- * tag, and feeds. Aiming and firing at the same time is the point -- hold RB as you
- * approach and the robot lines itself up while the balls go.
- *
- * Feeding is still gated on the launcher's spin-up measurement, so a cold wheel never
- * gets a ball. It is deliberately NOT gated on being aimed -- see REQUIRE_AIM_TO_FIRE
- * for why that gate was written, why it was turned off, and when to turn it back on.
+ * AIM AND SHOOT ARE ON TWO BUTTONS, AND SHOOTING ALSO AIMS. The right trigger only
+ * turns toward our goal tag. The right bumper does the same turn AND shoots -- it runs
+ * the intake and feeds the windmill. So the driver can line up with the trigger and
+ * fire with the bumper, or use the bumper to do both at once. Shooting is NOT gated on
+ * the aim being settled -- the driver decides when the robot is lined up -- but the
+ * feed is still gated on the launcher's spin-up measurement, so a cold wheel never
+ * gets a ball.
  *
  * WINDMILL WITH THE INTAKE. The windmill is the feed servo that pushes balls into the
  * launcher. It runs forward with the right bumper, but only once the launcher wheel is
- * measured at speed AND the robot has been aimed at least once during this press, so a
- * press during spin-up or during the turn is held, not lost. It runs in reverse with
- * square (clears a jam, always allowed). The left bumper runs the intake WITHOUT aim
- * and without the windmill, so a driver can load without firing.
+ * measured at speed, so a press during spin-up is held, not lost. It runs in reverse
+ * with square (clears a jam, always allowed). The left bumper runs the intake WITHOUT
+ * aim and without the windmill, so a driver can load without firing.
  */
 public abstract class TankTeleOpBase extends LinearOpMode {
 
@@ -80,8 +79,12 @@ public abstract class TankTeleOpBase extends LinearOpMode {
      */
     private static final long STICK_ZERO_CAL_MS = 500;
 
-    /** Multiplier at full precision trigger. */
-    private static final double CREEP_SCALE = 0.30;
+    /**
+     * How far the right trigger must be pulled to count as "auto-aim". The trigger is
+     * analog, so this is the point past which the driver clearly meant to use it rather
+     * than accidentally brush it.
+     */
+    private static final double TRIGGER_THRESHOLD = 0.4;
 
     /** Top speed as a fraction of full power. 1.0 is full; lower it to slow the robot. */
     private static final double DRIVE_GAIN = 1.0;
@@ -123,27 +126,6 @@ public abstract class TankTeleOpBase extends LinearOpMode {
     private static final long RANGE_HOLD_MS = 300;
 
     /**
-     * OFF. RB aims, runs the intake, and fires -- and the fire is gated by the
-     * launcher's spin-up measurement only, exactly as it was before aim existed.
-     *
-     * WHY THIS IS OFF. It was on first, on the theory that a ball fed mid-turn leaves
-     * sideways. In practice it made the button dead: "aimed" requires the bearing to
-     * sit inside AutoAim.DEADBAND_DEG for SETTLE_MS, that did not happen on the kitbot,
-     * and so the windmill never spun forward at all. A dead button is worse than an
-     * unaimed shot, and worse again because a driver cannot tell it apart from a broken
-     * robot. The driver's press should always do something.
-     *
-     * TURN IT ON ONLY ONCE "AIMED" IS PROVEN. Run "7. Auto Aim (April Tag)" and watch
-     * the aim line: if it reaches AIMED reliably, aim-gated firing is worth having and
-     * this flag is a one-line change. Until then the latch below is unused code.
-     *
-     * When on, the result is LATCHED for the rest of the press, so a single frame where
-     * the tag is lost or the bearing wobbles out of the deadband cannot stutter the feed
-     * the way the spin-up gate used to. Ignored entirely when there is no camera.
-     */
-    private static final boolean REQUIRE_AIM_TO_FIRE = false;
-
-    /**
      * Which cluster of BIOBUZZ tags is THIS robot's primary goal. Answered by the
      * subclasses. RED_FAR is the "RED SCORING" cluster (ids 30-33); BLUE_FAR is
      * "BLUE SCORING" (ids 42-45). The opposite cluster on the same HIVE is used as
@@ -156,6 +138,8 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         TankDrivebase drive = new TankDrivebase(hardwareMap);
         Intake intake = new Intake(hardwareMap);
         ShooterControls shooter = new ShooterControls(new Shooter(hardwareMap));
+        // Half-speed feed in TeleOp only; autonomous keeps full power.
+        shooter.setForwardFeedPower(ShooterControls.TELEOP_FEED_POWER);
         LimelightHiveTracker tracker =
                 new LimelightHiveTracker(hardwareMap, LIMELIGHT_NAME, FIDUCIAL_PIPELINE);
         AutoAim aim = new AutoAim();
@@ -180,7 +164,6 @@ public abstract class TankTeleOpBase extends LinearOpMode {
 
         boolean upPrev = false, downPrev = false;
         boolean aimHeldPrev = false;
-        boolean aimedThisHold = false;
 
         telemetry.addLine("Ready. Point the robot downfield before START.");
         telemetry.addData("alliance", "%s", scoringCell().alliance);
@@ -230,14 +213,14 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         while (opModeIsActive()) {
             long now = System.currentTimeMillis();
 
-            // --- aim: the right bumper takes over the TURN axis while it is held ---
-            boolean aimHeld = aimAvailable && gamepad1.right_bumper && !gamepad1.square;
+            // --- aim: the right trigger OR bumper takes over the TURN axis while held ---
+            boolean aimRequested = gamepad1.right_bumper
+                    || gamepad1.right_trigger > TRIGGER_THRESHOLD;
+            boolean aimHeld = aimAvailable && aimRequested && !gamepad1.square;
             if (aimHeld && !aimHeldPrev) {
-                // Rising edge: an old error must not bias the first turn of a new press,
-                // and the fire gate re-arms for this press.
+                // Rising edge: an old error must not bias the first turn of a new press.
                 aim.reset();
                 clearAimSmoothing();   // same reason: no angle from before this press
-                aimedThisHold = false;
             }
             aimHeldPrev = aimHeld;
 
@@ -245,7 +228,6 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             AutoAim.Aim aimCommand = aimHeld
                     ? aim.update(bearing, now)
                     : new AutoAim.Aim(0.0, false, false, false, Double.NaN);
-            if (aimHeld && aimCommand.settled) aimedThisHold = true;
 
             // --- drive: arcade, no strafe (a skid-steer cannot slide) ---
             // Subtract the stick's measured rest offset first, then deadband, so a
@@ -263,23 +245,21 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             boolean driverTurning = stickTurn != 0.0;
             boolean aimDriving = aimHeld && !driverTurning;
 
-            double scale = DRIVE_GAIN * (1.0 - (1.0 - CREEP_SCALE) * gamepad1.right_trigger);
-            // Creep trims the DRIVER's inputs only. Scaling the aim's turn by it would
-            // leave the correction too weak to close the last few degrees, and the robot
-            // would sit at "centering..." that never gets there.
-            double forwardCommand = forward * scale;
-            double turnCommand = aimDriving ? aimCommand.turn : stickTurn * scale;
+            double forwardCommand = forward * DRIVE_GAIN;
+            double turnCommand = aimDriving ? aimCommand.turn : stickTurn * DRIVE_GAIN;
 
             drive.driveRobotCentric(forwardCommand, turnCommand);
 
-            // --- intake, from the bumpers and square ---
-            // The windmill is handled further down, through the gates -- so it is
-            // deliberately NOT in this chain, even though RB also runs the intake.
+            // --- shoot: the right bumper runs the intake and the windmill ---
+            // The windmill is handled further down, through the spin-up gate -- so it is
+            // deliberately NOT in this chain.
+            boolean shooting = gamepad1.right_bumper && !gamepad1.square;
+
             double intakeMotor = 0.0, intakeServos = 0.0;
             if (gamepad1.square) {
                 intakeMotor = -1.0;   // reverse the roller to unjam / outake
                 // servos stay 0: they would fight the roller if reversed
-            } else if (gamepad1.right_bumper) {
+            } else if (shooting) {
                 intakeMotor = 1.0;
                 intakeServos = 1.0;
             } else if (gamepad1.left_bumper) {
@@ -290,21 +270,12 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             intake.setMotor(intakeMotor);
             intake.setServos(intakeServos);
 
-            // --- feed, through the spin-up gate and the aim gate ---
-            // Forward only once the wheel is measured at speed AND (when we can aim, and
-            // there is something to aim at) the robot has been aimed during this press.
-            // Reverse (square) is always allowed, for jam-clearing.
-            //
-            // The "something to aim at" clause is what keeps RB from going dead. With no
-            // goal tag in view the aim can never settle, so without it the windmill never
-            // spins forward and the fire button does nothing at all -- which is a worse
-            // failure than an unaimed shot, because the driver cannot tell it apart from
-            // a broken robot.
-            boolean goalInView = bearing != null;
-            boolean aimGateOpen = !REQUIRE_AIM_TO_FIRE || !aimAvailable || aimedThisHold
-                               || !goalInView;
-            shooter.requestFeed(gamepad1.right_bumper && !gamepad1.square && aimGateOpen,
-                                gamepad1.square);
+            // --- feed, through the spin-up gate ---
+            // Forward only once the wheel is measured at speed, so a cold wheel never
+            // gets a ball. Reverse (square) is always allowed, for jam-clearing. Shooting
+            // is NOT gated on the aim: the driver aims with the right bumper and decides
+            // when to fire.
+            shooter.requestFeed(shooting, gamepad1.square);
 
             // --- launcher: AUTO from the tag range, MANUAL when there is no range ---
             Double measuredRange = aimAvailable ? rangeToHive(tracker) : null;
@@ -366,13 +337,9 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                     lastAimCell == null ? "--" : lastAimCell.clusterName,
                     lastClusterMembers, HiveGeometry.CLUSTER_MEMBER_COUNT,
                     deg(lastFrameBearingDeg), deg(bearing));
-            telemetry.addData("fire gate", !REQUIRE_AIM_TO_FIRE ? "not gated on aim"
-                    : !aimAvailable ? "open (no camera)"
-                    : aimedThisHold ? "open (aimed this press)"
-                    : !goalInView ? "open (no goal tag in view -- unaimed shot)"
-                    : "waiting for aim");
+            telemetry.addData("shoot", shooting ? "FIRING (intake + feed)" : "off (hold RB)");
             telemetry.addLine();
-            telemetry.addLine("Left stick drives.  Hold RB = aim + intake + fire.");
+            telemetry.addLine("Left stick drives.  RT = auto-aim only, RB = auto-aim + shoot.");
             telemetry.addLine("LB intake only   square reverse   dpad up/down = speed");
             telemetry.update();
         }

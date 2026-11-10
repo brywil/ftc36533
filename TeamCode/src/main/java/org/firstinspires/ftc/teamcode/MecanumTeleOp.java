@@ -59,6 +59,8 @@ public class MecanumTeleOp extends LinearOpMode {
         Intake intake = new Intake(hardwareMap);
 
         ShooterControls shooter = new ShooterControls(new Shooter(hardwareMap));
+        // Half-speed feed in TeleOp only; autonomous keeps full power.
+        shooter.setForwardFeedPower(ShooterControls.TELEOP_FEED_POWER);
         LimelightHiveTracker tracker =
                 new LimelightHiveTracker(hardwareMap, "limelight", FIDUCIAL_PIPELINE);
 
