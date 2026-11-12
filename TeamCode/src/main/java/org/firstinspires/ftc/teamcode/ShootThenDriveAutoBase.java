@@ -56,7 +56,9 @@ import java.util.Locale;
  *   3. feed with the intake running: the first three pulses are short stutters with a
  *      recovery wait between them, then the windmill runs continuously for the rest of
  *      FEED_MAX_MS -- the stutters keep the first shots consistent, the continuous run
- *      clears the rest of the hopper;
+ *      clears the rest of the hopper. After the FIRST pulse, one backwards pulse of
+ *      the same length runs the windmill the other way to pull the next ball out of
+ *      the feed throat; the normal gap and pulse train then continue unchanged;
  *   4. drive at 50% power: forward 1, left 90, forward 1, right 90, forward 2.1,
  *      left 90, forward 1, then reverse 0.1;
  *   5. stop and report.
@@ -119,6 +121,20 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
 
     /** Minimum gap with the windmill off between starter pulses. */
     public static final long FEED_SMALL_PULSE_OFF_MS = 200;
+
+    /**
+     * Windmill power for the backwards pulse that follows the FIRST forward pulse.
+     * The first pulse pushes a ball up against the wheel; running the windmill
+     * backwards pulls the next ball back out of the feed throat, so it is not
+     * double-fed the instant feeding resumes.
+     *
+     * The reverse lasts exactly as long as a forward pulse -- {@link
+     * #FEED_SMALL_PULSE_ON_MS} -- and is then followed by the normal gap and pulse
+     * train, so none of the existing timings change. Pulses 2 and later keep the
+     * original stop-then-pulse pattern. -1.0 is full reverse, the same as the
+     * driver's jam-clearing button.
+     */
+    public static final double FEED_REVERSE_AFTER_FIRST_PULSE = -1.0;
 
     /**
      * After a pulse, wait until the wheel is back to this fraction of the speed we asked
@@ -270,6 +286,7 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         long phaseBegin = feedBegin;
         int pulsesDone = 0;
         boolean pulsing = true;
+        boolean reversing = false;   // the one backwards pulse after pulse 1
         boolean continuous = false;
         shooter.shooter().setFeed(1.0);
 
@@ -289,6 +306,19 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
                         pulsing = false;
                         phaseBegin = now;
                         pulsesDone++;
+                        if (pulsesDone == 1) {
+                            // Backwards for exactly one forward-pulse width, then the
+                            // normal gap below runs untouched.
+                            reversing = true;
+                            shooter.shooter().setFeed(FEED_REVERSE_AFTER_FIRST_PULSE);
+                        } else {
+                            shooter.shooter().setFeed(0.0);
+                        }
+                    }
+                } else if (reversing) {
+                    if (phase >= FEED_SMALL_PULSE_ON_MS) {
+                        reversing = false;
+                        phaseBegin = now;
                         shooter.shooter().setFeed(0.0);
                     }
                 } else if (phase >= FEED_SMALL_PULSE_OFF_MS
@@ -306,6 +336,7 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
 
             String state = continuous ? "CONTINUOUS"
                     : pulsing ? "stutter " + pulsesDone + "/" + FEED_SMALL_PULSE_COUNT
+                    : reversing ? "reversing after pulse 1"
                     : (recovered ? "recovered" : "recovering");
             telemetry.addData("feed phase", "%d / %d ms  %s  (intake on)",
                     fed, FEED_MAX_MS, state);
@@ -317,7 +348,10 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
                 telemetry.addLine("LAUNCHER SATURATED -- battery cannot hold the speed");
             }
             telemetry.update();
-            log.row(fed, continuous ? "feed-cont" : (pulsing ? "feed-on" : "feed-off"), state,
+            String phaseName = continuous ? "feed-cont"
+                    : pulsing ? "feed-on"
+                    : reversing ? "feed-rev" : "feed-off";
+            log.row(fed, phaseName, state,
                     num(asked), num(actual),
                     num(shooter.shooter().getLauncherPower()), "", "", "", "");
             idle();
