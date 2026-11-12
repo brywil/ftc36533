@@ -75,7 +75,8 @@ public class MecanumTeleOp extends LinearOpMode {
         boolean upPrev = false, downPrev = false;
 
         telemetry.addLine("Ready. Point the robot downfield before START.");
-        telemetry.addData("limelight", tracker.hasLimelight() ? "OK" : "MISSING (shooter = MANUAL)");
+        telemetry.addData("limelight", tracker.hasLimelight()
+                ? "in config -- live link after START" : "MISSING (shooter = MANUAL)");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.update();
         waitForStart();
@@ -145,6 +146,7 @@ public class MecanumTeleOp extends LinearOpMode {
                 telemetry.addData("  range", "%.1f in", shooter.getLastRangeIn());
             }
             telemetry.addData("feed", shooter.feedState());
+            telemetry.addData("limelight", tracker.linkText());
             telemetry.update();
         }
 

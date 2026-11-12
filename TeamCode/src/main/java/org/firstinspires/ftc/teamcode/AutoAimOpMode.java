@@ -85,6 +85,8 @@ public class AutoAimOpMode extends LinearOpMode {
                 ? DcMotorSimple.Direction.FORWARD : DcMotorSimple.Direction.REVERSE);
 
         telemetry.addLine(fourWheel ? "Found 4 motors -- mecanum." : "Found 2 motors -- tank.");
+        telemetry.addData("limelight", tracker.hasLimelight()
+                ? "in config -- live link after START" : "MISSING");
         telemetry.addLine("Point the Limelight at the target's AprilTag.");
         telemetry.addLine("WHEELS OFF THE GROUND for the first aim test.");
         telemetry.addLine("Press START, then press A to aim.");
@@ -118,6 +120,7 @@ public class AutoAimOpMode extends LinearOpMode {
             applyDrive(forward, strafe, turn);
 
             // --- telemetry: the numbers you tune against ---
+            telemetry.addData("limelight", tracker.linkText());
             telemetry.addData("aim", aimOn ? "ON" : "OFF (A to toggle)");
             telemetry.addData("tag", bearing == null
                     ? "none in view" : String.format(Locale.US, "bearing %+.1f deg", bearing));

@@ -171,7 +171,8 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                 scoringCell().clusterName, idList(scoringCell()));
         telemetry.addData("  fallback", "%s (tags %s)",
                 scoringCell().opposite().clusterName, idList(scoringCell().opposite()));
-        telemetry.addData("limelight", aimAvailable ? "OK" : "MISSING -- aim disabled");
+        telemetry.addData("limelight", aimAvailable
+                ? "in config -- live link after START" : "MISSING -- aim disabled");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
         telemetry.addData("shooter base (saved)", "%.0f ticks/s  trim %+.0f",
@@ -332,6 +333,7 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                 telemetry.addData("  range", "%.1f in", shooter.getLastRangeIn());
             }
             telemetry.addData("feed", shooter.feedState());
+            telemetry.addData("limelight", tracker.linkText());
             telemetry.addData("aim", aimText(aimAvailable, aimHeld, bearing, aimCommand));
             telemetry.addData("aim cluster", "%s   %d of %d tags   frame %s   smoothed %s",
                     lastAimCell == null ? "--" : lastAimCell.clusterName,

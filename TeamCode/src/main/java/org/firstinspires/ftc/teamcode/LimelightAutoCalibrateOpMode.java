@@ -88,6 +88,8 @@ public class LimelightAutoCalibrateOpMode extends LinearOpMode {
 
         limelight.pipelineSwitch(FIDUCIAL_PIPELINE);
         limelight.start();
+        // Let the first /results poll land, so the link line below is truthful.
+        sleep(300);
 
         String original = null;
         boolean winnerApplied = false;
@@ -95,15 +97,34 @@ public class LimelightAutoCalibrateOpMode extends LinearOpMode {
         try {
             LLStatus status = limelight.getStatus();
             String pipelineType = status == null ? "" : status.getPipelineType();
+            boolean connected = limelight.isConnected();
+            telemetry.addData("link", connected
+                    ? String.format(Locale.US, "connected (%d ms since frame)",
+                            limelight.getTimeSinceLastUpdate())
+                    : "NOT CONNECTED -- check USB/power");
             telemetry.addData("pipeline", status == null ? "no status"
                     : status.getPipelineIndex() + " " + pipelineType);
             telemetry.update();
 
-            if (pipelineType == null
-                    || !pipelineType.toLowerCase(Locale.US).contains("fiducial")) {
+            // Tell the three failures apart. An unreachable camera also reports an
+            // empty pipeline type, so without the connectivity check first this would
+            // wrongly blame the pipeline setting.
+            if (!connected) {
+                telemetry.addLine("The camera is in the Robot Configuration but is not answering.");
+                telemetry.addLine("Check its USB-C cable and its power/status LED.");
+                reportAndHold();
+                return;
+            }
+            if (pipelineType == null || pipelineType.isEmpty()) {
+                telemetry.addLine("The camera answered but reported no pipeline type.");
+                telemetry.addLine("Open its web page and check the pipeline slots.");
+                reportAndHold();
+                return;
+            }
+            if (!pipelineType.toLowerCase(Locale.US).contains("fiducial")) {
                 telemetry.addLine("Pipeline " + FIDUCIAL_PIPELINE + " is not a fiducial pipeline.");
                 telemetry.addLine("Set it to Fiducial, 36h11, 3D on.");
-                telemetry.update();
+                reportAndHold();
                 return;
             }
 
@@ -193,7 +214,7 @@ public class LimelightAutoCalibrateOpMode extends LinearOpMode {
             telemetry.update();
         } catch (Exception e) {
             telemetry.addLine("Sweep failed: " + e.getMessage());
-            telemetry.update();
+            reportAndHold();
         } finally {
             if (!winnerApplied && original != null) {
                 try {
@@ -203,6 +224,16 @@ public class LimelightAutoCalibrateOpMode extends LinearOpMode {
             }
             limelight.stop();
         }
+    }
+
+    /**
+     * Keep a failure on the Driver Station until the driver presses STOP. Without
+     * this the OpMode returns and the DS immediately clears the telemetry, which
+     * looks exactly like "it disabled itself and said nothing".
+     */
+    private void reportAndHold() {
+        telemetry.update();
+        while (opModeIsActive()) idle();
     }
 
     private int[] measure(Limelight3A limelight) {

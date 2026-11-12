@@ -45,7 +45,8 @@ public class ShooterOpMode extends LinearOpMode {
         if (!tracker.hasLimelight()) shooter.fallBackToManual();
 
         telemetry.addLine("Point the Limelight at the target's AprilTag, then START.");
-        telemetry.addData("limelight", tracker.hasLimelight() ? "OK" : "MISSING (MANUAL only)");
+        telemetry.addData("limelight", tracker.hasLimelight()
+                ? "in config -- live link after START" : "MISSING (MANUAL only)");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("table points", Shooter.RANGE_VELOCITY_TABLE.length
                 + (Shooter.RANGE_VELOCITY_TABLE.length < Shooter.MIN_POINTS
@@ -84,6 +85,7 @@ public class ShooterOpMode extends LinearOpMode {
                     shooter.velocitySource(), shooter.getCommandedVelocity(),
                     shooter.getVelocity(), shooter.isSpunUp() ? "READY" : "spinning up");
             telemetry.addData("feed", shooter.feedState());
+            telemetry.addData("limelight", tracker.linkText());
             telemetry.addLine();
             telemetry.addLine("A arm/off   B manual/auto   dpad tune (manual)   RB feed   LB clear");
             telemetry.update();

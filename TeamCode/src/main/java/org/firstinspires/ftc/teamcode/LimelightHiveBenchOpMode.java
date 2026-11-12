@@ -71,9 +71,14 @@ public class LimelightHiveBenchOpMode extends LinearOpMode {
         tracker.start();
 
         while (opModeIsActive()) {
-            LLStatus status = tracker.getLimelight().getStatus();
-            telemetry.addData("pipeline", "%d %s", status.getPipelineIndex(), status.getPipelineType());
-            telemetry.addData("fps", "%.0f", status.getFps());
+            telemetry.addData("limelight", tracker.linkText());
+            if (tracker.getLimelight() != null) {
+                LLStatus status = tracker.getLimelight().getStatus();
+                telemetry.addData("pipeline", "%d %s", status.getPipelineIndex(), status.getPipelineType());
+                telemetry.addData("fps", "%.0f", status.getFps());
+            } else {
+                telemetry.addLine("Add the Limelight as an Ethernet Device named \"limelight\".");
+            }
 
             // --- BIOBUZZ tag grid: all 16 tags (30-45) at a glance ---
             // A tag that was not seen is simply absent from the list below, which

@@ -68,6 +68,8 @@ public class ShooterCalibrateOpMode extends LinearOpMode {
         telemetry.addLine(shooter.hasLauncher()
                 ? "launcher: OK" : "launcher: MISSING -- name it \"launcher\"");
         telemetry.addLine(shooter.hasWindmill() ? "windmill: OK" : "windmill: MISSING (optional)");
+        telemetry.addData("limelight", tracker.hasLimelight()
+                ? "in config -- live link after START" : "MISSING");
         telemetry.update();
 
         waitForStart();
@@ -108,6 +110,7 @@ public class ShooterCalibrateOpMode extends LinearOpMode {
             aPrev = gamepad1.a; bPrev = gamepad1.b;
 
             // --- telemetry ---
+            telemetry.addData("limelight", tracker.linkText());
             telemetry.addData("range to tag", rangeIn == null
                     ? "no tag in view" : String.format(Locale.US, "%.1f in", rangeIn));
             telemetry.addData("wheel speed", "%.0f ticks/s asked, %.0f actual %s",

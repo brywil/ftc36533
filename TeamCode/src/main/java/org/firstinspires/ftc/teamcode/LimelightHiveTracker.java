@@ -76,6 +76,38 @@ public class LimelightHiveTracker {
     /** True when the camera exists in the Robot Configuration. */
     public boolean hasLimelight() { return limelight != null; }
 
+    /**
+     * True only while the camera is actually answering. The SDK stamps a time on
+     * every successful /results fetch, and this asks whether that stamp is fresh
+     * (inside the SDK's own 250 ms threshold).
+     *
+     * This is NOT the same question as {@link #hasLimelight()}. A device that is in
+     * the Robot Configuration is "present" even when it is switched off, unplugged,
+     * or unreachable on the network: then hasLimelight() is true and this is false.
+     * That difference is why the Driver Station now shows this line -- "in the
+     * config" proves nothing, "connected" means frames are actually arriving.
+     *
+     * Only meaningful after {@link #start()}: before that the poller has never run,
+     * so this is false even on a perfectly healthy camera.
+     */
+    public boolean isConnected() {
+        return limelight != null && limelight.isConnected();
+    }
+
+    /**
+     * One line for telemetry: the live link state, or why it cannot be live.
+     * Call it from the OpMode loop, after {@link #start()}; see {@link #isConnected()}.
+     */
+    public String linkText() {
+        if (limelight == null) return "MISSING from Robot Configuration";
+        long ageMs = limelight.getTimeSinceLastUpdate();
+        if (ageMs <= 250) return String.format(Locale.US, "connected (%d ms since frame)", ageMs);
+        // The SDK's last-update stamp starts at 0, so a camera that has never
+        // answered reports an age of decades. Say what that actually means.
+        if (ageMs >= 10_000) return "NOT CONNECTED -- check USB/power";
+        return String.format(Locale.US, "no frames (%d ms)", ageMs);
+    }
+
     /** The underlying device, or null when there is no camera. */
     public Limelight3A getLimelight() { return limelight; }
 
