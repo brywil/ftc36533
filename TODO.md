@@ -5,42 +5,21 @@ items 7–9 were added on 2026-10-19 by the work that split TeleOp and Autonomou
 alliance, added the park, and put the Control Hub's IMU into the auto; item 10 was added
 on 2026-11-19 from the Limelight camera-calibration work. **These are for the
 team to do** — each one says what is wrong, why it matters, where to look, and how to check
-your fix. Do them in order; the first one is a safety issue.
+your fix. The numbers are still the rough priority order; item 1, the safety issue, is
+done, and the rest keep their numbers because code comments reference them by number
+(see "TODO #6" in ForwardOneAimAndShootAutoBase.java).
+
+Items 1 (drive encoder cables + WIRING.md) and 3 (the measured drive geometry) are DONE
+and were removed on 2026-11-19.
 
 When you finish one, delete it from this list in the same commit as the fix.
 
 ---
 
-## 1. Plug in the drive motor encoder cables (do this before running Autonomous)
-
-**What's wrong.** `8. Auto: 2 Squares, Turn 90, Launch` (`ForwardAndTurnAuto.java`) and the
-`9red`/`9blue` autos measure how far the robot has driven with the **drive motors'
-encoders**. Right now only the launcher has its encoder cable plugged in, and `WIRING.md`
-says the other motors don't need one.
-
-**Why it matters.** With no encoder cable, the motor's position always reads 0, so the
-robot never "arrives". It keeps driving at half power until the timeout — several metres
-across the field — and then spins for several more seconds. That is a runaway robot, not a
-missed target.
-
-**What to do.**
-1. The goBILDA drive motors already have encoders built in; only the cable to the Control
-   Hub is missing. Plug an encoder cable from each drive motor (`left_drive`,
-   `right_drive`) into the Control Hub's encoder port **with the same number as that
-   motor's power port**.
-2. Fix `WIRING.md`: the line "The other three motors do not need encoders" (line ~76) is
-   now wrong. Say the drive motors need encoders for Autonomous.
-3. Check it works **with the robot on blocks** (wheels off the ground): run the auto.
-   The Driver Station shows `left` and `right` as "ticks moved / ticks wanted". Both
-   numbers should climb and the wheels should stop on their own when they reach the
-   target. If a side stays at 0, that side's encoder cable is missing or in the wrong
-   port.
-
----
-
 ## 2. Make Autonomous stop if the encoders aren't working — CODE DONE, NOT YET TESTED ON THE ROBOT
 
-**What's wrong.** Even after #1, a cable can come loose. `runMove()` in
+**What's wrong.** Even with the drive encoder cables correctly plugged in, a cable can
+come loose. `runMove()` in
 `ForwardAndTurnAuto.java` only gives up when the timeout runs out.
 
 **What's done.** `runMove()` now checks each side on its own: if a side was asked to
@@ -53,25 +32,6 @@ curves on the straight, or spins until timeout on the turn).
 Unplug one encoder cable, put the robot on blocks (wheels off the ground), run the auto.
 It should stop within about a second and show the message. If it does, delete this item
 from the list in the same commit as any fix.
-
----
-
-## 3. Measure the three numbers Autonomous depends on — MEASURED, CODE UPDATED, NOT YET VERIFIED ON THE FLOOR
-
-Measured 2026-10-07 and written into `ForwardAndTurnAuto.java`:
-
-- `TICKS_PER_WHEEL_REV = 537.7` is **correct** — it is the **19.2:1** gearbox
-  (28 counts/motor-turn x 19.2), not the 5.23:1 the old comment claimed. Confirmed by
-  hand: 2683 ticks over 5 wheel turns = 536.6. Only the comment was wrong; it is fixed.
-- `WHEEL_DIAMETER_IN = 3.75` (tape across the tread; was 4.0).
-- `TRACK_WIDTH_IN = 15.75` (centre of left wheel to centre of right; was 12.0).
-
-**STILL TO DO — verify on the floor.** The file's header explains the one-tile push test:
-push the robot exactly one tile and compare the encoder count with what the code expects.
-Do that (and the on-blocks auto run) before trusting a score, then delete this item.
-
-Note the park now leans on two more geometry numbers — `PARK_DISTANCE_IN` and
-`TRACK_WIDTH_IN` again for the 90 deg turn — so a track-width error shows up twice.
 
 ---
 
@@ -89,20 +49,42 @@ and set it to `true` only when you paste in real numbers from `5. Shooter Calibr
 
 ---
 
-## 5. Shooter: aim at the goal's tag, not just the nearest tag — PARTLY DONE
+## 5. Shooter: range the goal's tags, not the nearest tag — THE LAST PIECE
 
-Also only for the Limelight OpModes.
+**What's wrong.** The standalone `6. Shooter` OpMode still asks for `nearestRangeIn()` —
+the distance to the closest AprilTag of **any** kind. If an audience tag or the opponent's
+cluster is closer than the goal, it ranges for the wrong distance and the speed comes
+from the wrong table row, so the shot is wrong. The autos already fixed this half:
+`9red`/`9blue` filter to their own alliance's SCORING cluster. What is left is exactly
+one loop:
 
-**What's wrong.** The shooter asks for `nearestRangeIn()` — the distance to the closest
-AprilTag of **any** kind. If another tag on the field is closer than the goal, the robot
-shoots for the wrong distance.
+- `ShooterOpMode.java`, lines 74–76: `tracker.nearestRangeIn()` feeds `shooter.update(...)`.
 
-**Partly done.** `9red`/`9blue` no longer do this: they filter to their own alliance's
-SCORING cluster (`scoringCell()`), so a red auto cannot range off a blue or audience tag.
-The standalone `6. Shooter` OpMode still uses `nearestRangeIn()`.
+**What to do.** Two sizes of fix; there is working code to copy for both:
 
-**What to do.** Look up the goal's tag ID in the game manual and use the tracker's
-`tagWithId(id)` method (in `LimelightHiveTracker.java`) instead of the nearest one.
+1. Smallest: pin one tag ID (this was the code review's original suggestion). Look up the
+   goal's tag ID in the game manual and use the tracker's `tagWithId(id)` (in
+   `LimelightHiveTracker.java`) instead of nearest-of-everything. The catch: the goal's
+   tag ID is alliance-specific, so one OpMode cannot know it -- the alliance has to be
+   TOLD, which is exactly why `2a`/`2b` and `9red`/`9blue` exist.
+2. Recommended, and the pattern everything else already follows: split `6. Shooter` into
+   a thin red/blue pair like `TankTeleOpRed`/`TankTeleOpBlue`. Move the body into a
+   `ShooterOpModeBase`, add `protected abstract HiveGeometry.Cell scoringCell()`, and
+   range on the MEAN of whichever member tags of that cluster are in view — the red
+   scoring cluster is ids 30-33, blue is 42-45 (`HiveGeometry.Cell`). Copy the
+   filter-and-mean from `ForwardOneAimAndShootAutoBase.aimAndShoot()` (the part that
+   builds `sumRange`/`nRange`), which already averages member ranges, skips tags
+   without a 3D pose, and falls back gracefully. A red robot then cannot range off a
+   blue or audience tag, and the alliance becomes a visible Driver Station choice.
+
+**How to check.** Bench, camera in its fiducial pipeline, launcher armed (hands clear of
+the muzzle). Put OUR goal's tags in view at, say, 60 in, and nearer in view put an
+AUDIENCE tag. The telemetry's range must read the ~60 in goal distance, not the near
+tag, and the asked speed must match the table row that ~60 in interpolates to. Also
+verify with only the audience tag in view: the OpMode should show NO RANGE rather than
+fire for an audience distance.
+
+**When it is done:** delete this item in the same commit as any fix.
 
 ---
 

@@ -73,7 +73,14 @@ cannot read its speed, so `getVelocity()` reads 0, the spin-up guard never says
 needs one, plugged into the port beside the motor. This is the single most likely
 thing to be wrong, and it presents as "the launcher spins but never shoots".
 
-The other three motors do not need encoders.
+The **drive motors need their encoder cables too** (confirmed on the robot
+2026-11-19): every Autonomous move is measured in encoder ticks,
+`driveToTicks(...)` holds until those ticks arrive, and with no cable the position
+always reads 0 -- the auto would keep driving at power until its timeout and never
+stop on its own. Plug each drive motor's encoder cable into the port whose number
+matches that motor's power port (`left_drive`, `right_drive`).
+
+The intake's motor is the only one with no encoder in use.
 
 ---
 
