@@ -2,7 +2,8 @@
 
 Things the robot or the code needs. Items 1–6 come from a code review on 2026-10-01;
 items 7–9 were added on 2026-10-19 by the work that split TeleOp and Autonomous by
-alliance, added the park, and put the Control Hub's IMU into the auto. **These are for the
+alliance, added the park, and put the Control Hub's IMU into the auto; item 10 was added
+on 2026-11-19 from the Limelight camera-calibration work. **These are for the
 team to do** — each one says what is wrong, why it matters, where to look, and how to check
 your fix. Do them in order; the first one is a safety issue.
 
@@ -178,6 +179,76 @@ did not get this change. If that auto overshoots too, lower it there as well.
 
 Do not go below `Shooter.MIN_LAUNCH_VELOCITY` (800): below that the wheel can never measure
 as spun up, the windmill never opens, and nothing is fired at all.
+
+---
+
+## 10. Save the Limelight's tuned exposure/gain on the Control Hub, and re-assert it whenever a mode starts
+
+**What's wrong.** `4b. Limelight Auto Calibrate` sweeps exposure and gain over the camera's
+REST API and applies the winner to pipeline 1 with `POST /upload-pipeline`, which per
+Limelight's own API docs overwrites the pipeline **on disk** — so the setting normally
+survives a camera reboot. But the result lives only inside the camera: nothing on the robot
+records it. If the camera's pipeline is later replaced from its web page, the flash is
+wiped, or a slider gets nudged, the next match runs on whatever the camera happens to hold,
+and nothing on the hub can say what that was.
+
+**The design (agreed 2026-11-19).** Make the ROBOT the keeper of the tuned values, and make
+applying them automatic — so it never depends on anyone reading the hub screen, which is
+already too busy to be read.
+
+1. **`4b` saves the winner.** When it applies the winner (in
+   `LimelightAutoCalibrateOpMode.java`, right after `winnerApplied = true`), write a small
+   JSON file — one line is plenty:
+
+   ```json
+   { "exposure": 400, "lcgain": 50, "detect": 87, "recorded": "2026-11-19 14:22" }
+   ```
+
+   `hardwareMap.appContext.getExternalFilesDir(null)` gives an app-private folder: no
+   permissions needed, survives a hub reboot, readable over `adb`. Also log the same
+   numbers with `RobotLog`, plus the original settings and the P/. grid, so the record for
+   whoever debugs at a venue is in the RC log, not on a screen.
+
+2. **Every camera OpMode re-asserts it.** All camera-using OpModes build a
+   `LimelightHiveTracker` and call `start()`, so the apply belongs there — one place, not
+   seven. In `LimelightHiveTracker.start()`, AFTER `pipelineSwitch(...)` (the update must
+   land on the pipeline that is running), read the file and POST
+   `{"exposure": …, "lcgain": …}` to `/update-pipeline`.
+
+   PATCH, never upload: `/update-pipeline` takes partial settings, and without `flush=1`
+   it writes nothing to the camera's disk — the re-assert is a runtime patch onto
+   whatever the camera has, not a second calibration.
+
+   The HTTP helper the sweep uses lives inside `LimelightAutoCalibrateOpMode.java` as a
+   private static. Move it out into one small shared class (e.g. `LimelightSettings`) so
+   the save and the apply own a single copy of it.
+
+3. **Missing file or silent camera never blocks anything.** No file → apply nothing; the
+   camera keeps its own values. Camera not answering → skip, `RobotLog` it, continue; use
+   a short connect timeout (~300 ms) so INIT never feels hung. The camera is already
+   optional everywhere else; this must be too.
+
+4. **NO NEW TELEMETRY.** The control hub screen is tiny and already carries more than
+   anyone reads — this feature gets ZERO new lines on it. If anything, replace the
+   existing `limelight: OK/MISSING` line in the OpModes that have it with
+   `limelight: 400/50 (tuned)` — same line, strictly more information. The file plus the
+   `RobotLog` lines are the whole record.
+
+**How to check.**
+
+1. Run `4b` to completion on the bench. Read the hub's JSON file back over `adb` and
+   confirm it holds the winner, the detection rate and a date.
+2. Insurance test, without touching the robot: on the camera's web page, set exposure to
+   something silly. Select any camera OpMode and START, then STOP. The web page must
+   show the tuned values put back — with no other action than selecting the mode.
+3. Reboot the camera and re-check `GET /pipeline-atindex?index=1` in a browser. The docs
+   say `4b` wrote the winner to the camera's disk and the tracker patch does not write
+   to disk, so rebooting must still show them. If they are gone, write down what your
+   camera's firmware actually does — that finding is worth more than the feature.
+4. Unplug the camera and run a drive OpMode: the robot must still drive, and INIT must
+   not hang or crash for a missing camera or a missing file.
+
+**When it is done:** delete this item in the same commit as any fix.
 
 ---
 
