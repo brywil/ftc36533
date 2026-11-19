@@ -63,7 +63,7 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
 
     // --- Shooting -------------------------------------------------------------
 
-    public static final double LAUNCH_VELOCITY = 1300.0;
+    public static final double LAUNCH_VELOCITY = 1200.0;
     public static final long FEED_DURATION_MS = 5000;
     public static final double FEED_INTAKE_POWER = 1.0;
 
@@ -106,6 +106,7 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
         telemetry.addData("watch cell", scoringCell().clusterName);
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
+        telemetry.addData("gate", shooter.shooter().hasGate() ? "OK" : "MISSING");
         telemetry.update();
 
         waitForStart();

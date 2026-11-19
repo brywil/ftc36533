@@ -154,15 +154,17 @@ the park.
 
 ---
 
-## 9. The shooter speed is a guess
+## 9. The shooter speed is only measured straight-on
 
-`Shooter.RANGE_VELOCITY_TABLE` is **1275** ticks/s, which is one dpad step below the 1300
-that was measured on 2026-10-15 and then overshot. **Nobody has watched a ball land on
-1275.** To replace it with a measured number: in `2a`/`2b`, press dpad-down until the shots
-land, read `asked … ticks/s` off the launcher telemetry, and paste that into the table.
+The flywheel was replaced with a heavier one on 2026-11-18. `Shooter.RANGE_VELOCITY_TABLE`
+is a flat **1200** ticks/s measured straight-on -- fairly consistent, but not perfect, and
+only at one distance. Every auto's `LAUNCH_VELOCITY` plus
+`ShooterControls.DEFAULT_MANUAL_VELOCITY` is 1200 too. To turn this into a curve: measure a
+second distance in `2a`/`2b` (press dpad until the shots land, read `asked … ticks/s` off
+the launcher telemetry) and add a row to the table.
 
-Related: `ForwardAndTurnAuto.LAUNCH_VELOCITY` (the `8. Auto`) is a separate **1300** that
-did not get this change. If that auto overshoots too, lower it there as well.
+Note the teleop restores the driver's last saved speed from SharedPreferences, so an
+already-run robot keeps its old saved value until it is cleared or tuned with the dpad.
 
 Do not go below `Shooter.MIN_LAUNCH_VELOCITY` (800): below that the wheel can never measure
 as spun up, the windmill never opens, and nothing is fired at all.

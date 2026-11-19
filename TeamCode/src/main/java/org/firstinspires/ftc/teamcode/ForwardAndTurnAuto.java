@@ -124,15 +124,16 @@ public class ForwardAndTurnAuto extends LinearOpMode {
 
     /**
      * Launcher wheel speed for the shot, in encoder ticks per second. This is the
-     * SAME kind of number the distance->speed table holds. 1300 is the shared auto
-     * launch speed; tune in 25-tick steps and watch the shot, not the number.
+     * SAME kind of number the distance->speed table holds. 1200 is the shared auto
+     * launch speed, measured straight-on with the heavier flywheel (2026-11-18); tune
+     * in 25-tick steps and watch the shot, not the number.
      *
      * WATCH OUT: this is a closed-loop target. If the wheel cannot actually reach it
      * (weak battery, or too high a value), the spin-up wait below times out and the
      * telemetry says "launcher at speed: NO" -- that means the speed is above what the
      * motor can hold, not that the code is broken.
      */
-    public static final double LAUNCH_VELOCITY = 1300.0;
+    public static final double LAUNCH_VELOCITY = 1200.0;
 
     /** Let the chassis stop rocking after the turn before feeding, so the shot is straight. */
     public static final long SETTLE_AFTER_TURN_MS = 500;
@@ -188,6 +189,7 @@ public class ForwardAndTurnAuto extends LinearOpMode {
         telemetry.addData("turn", "%d ticks (%.0f deg)", turnTicks, TURN_DEG);
         telemetry.addData("launcher", shooter.hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.hasWindmill() ? "OK" : "MISSING");
+        telemetry.addData("gate", shooter.hasGate() ? "OK" : "MISSING");
         telemetry.addLine();
         telemetry.addLine("If these are wrong, the geometry constants at the");
         telemetry.addLine("top of ForwardAndTurnAuto.java need measuring.");

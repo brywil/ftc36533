@@ -33,10 +33,12 @@ public class ShooterControls {
     /**
      * Starting manual velocity, and the step the tune buttons move it by. This is the
      * TELEOP's base speed on a first run; after that the teleop loads the driver's last
-     * saved value. Autonomous pins its own LAUNCH_VELOCITY, so this does not change an
-     * auto.
+     * saved value, so an already-saved speed still wins until the saved settings are
+     * cleared or retuned with the dpad. Autonomous pins its own LAUNCH_VELOCITY, so this
+     * does not change an auto. 1200 is the straight-on speed measured for the heavier
+     * flywheel fitted 2026-11-18.
      */
-    public static final double DEFAULT_MANUAL_VELOCITY = 1300.0;
+    public static final double DEFAULT_MANUAL_VELOCITY = 1200.0;
     public static final double MANUAL_STEP = 25.0;
 
     /** Full-power forward feed. Autonomous and anything that does not lower it uses this. */

@@ -33,10 +33,10 @@ public class LaunchOnlyAuto extends LinearOpMode {
 
     /**
      * Launcher wheel speed for the shot, in encoder ticks per second. Matches
-     * ForwardAndTurnAuto's value so the two autos shoot the same: 1300. Tune by
-     * watching the ball, not the number.
+     * ForwardAndTurnAuto's value so the two autos shoot the same: 1200, measured
+     * straight-on. Tune by watching the ball, not the number.
      */
-    public static final double LAUNCH_VELOCITY = 1300.0;
+    public static final double LAUNCH_VELOCITY = 1200.0;
 
     /**
      * Wait at most this long for the wheel to report at-speed before feeding anyway.
@@ -57,6 +57,7 @@ public class LaunchOnlyAuto extends LinearOpMode {
         telemetry.addLine("WHEELS OFF THE GROUND for the first run.");
         telemetry.addData("launcher", shooter.hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.hasWindmill() ? "OK" : "MISSING");
+        telemetry.addData("gate", shooter.hasGate() ? "OK" : "MISSING");
         telemetry.update();
 
         waitForStart();

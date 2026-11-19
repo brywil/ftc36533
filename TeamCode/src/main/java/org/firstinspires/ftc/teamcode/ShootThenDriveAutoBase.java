@@ -86,7 +86,7 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
     // --- Shooting -----------------------------------------------------------
 
     /** Launcher wheel speed for the shot, ticks/s. Same as the other autos. */
-    public static final double LAUNCH_VELOCITY = 1300.0;
+    public static final double LAUNCH_VELOCITY = 1200.0;
 
     /**
      * Cap on waiting for the wheel to report at-speed before feeding anyway. Raised
@@ -221,6 +221,7 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         telemetry.addLine();
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
+        telemetry.addData("gate", shooter.shooter().hasGate() ? "OK" : "MISSING");
         telemetry.addData("movement power", "%.0f%%", MOVEMENT_POWER * 100);
         telemetry.addData("log", log.isOpen() ? log.path() : "OFF -- could not open");
         telemetry.addLine("Pull with: adb pull " + TeamRunLog.folderOnHub() + " .");

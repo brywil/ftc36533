@@ -68,6 +68,7 @@ public class ShooterCalibrateOpMode extends LinearOpMode {
         telemetry.addLine(shooter.hasLauncher()
                 ? "launcher: OK" : "launcher: MISSING -- name it \"launcher\"");
         telemetry.addLine(shooter.hasWindmill() ? "windmill: OK" : "windmill: MISSING (optional)");
+        telemetry.addLine(shooter.hasGate() ? "gate: OK (closed)" : "gate: MISSING (optional)");
         telemetry.addData("limelight", tracker.hasLimelight()
                 ? "in config -- live link after START" : "MISSING");
         telemetry.update();
