@@ -51,38 +51,42 @@ and set it to `true` only when you paste in real numbers from `5. Shooter Calibr
 
 ## 5. Shooter: range the goal's tags, not the nearest tag — THE LAST PIECE
 
-**What's wrong.** The standalone `6. Shooter` OpMode still asks for `nearestRangeIn()` —
-the distance to the closest AprilTag of **any** kind. If an audience tag or the opponent's
-cluster is closer than the goal, it ranges for the wrong distance and the speed comes
-from the wrong table row, so the shot is wrong. The autos already fixed this half:
-`9red`/`9blue` filter to their own alliance's SCORING cluster. What is left is exactly
-one loop:
+**What is already done — verified 2026-11-19, don't break it.** Every mode that knows its
+alliance already filters to its own SCORING cluster: `2a`/`2b` (the filter lives in
+`TankTeleOpBase.rangeToHive` / `bearingToHive`), `9red`/`9blue`, `13`/`14`. A red robot
+cannot range off a blue or audience tag in any of them.
 
-- `ShooterOpMode.java`, lines 74–76: `tracker.nearestRangeIn()` feeds `shooter.update(...)`.
+**What is left.** Three single modes have no alliance to filter with and still ask for
+`nearestRangeIn()` — the distance to the closest tag of ANY kind:
 
-**What to do.** Two sizes of fix; there is working code to copy for both:
+- `ShooterOpMode.java` (~line 75) — `6. Shooter (Limelight)`, enabled;
+- `MecanumTeleOp.java` (~line 133) — `2. Mecanum TeleOp`, enabled, the practice bot's
+  match TeleOp;
+- `TankTeleOp.java` (~line 141) — `2. Tank TeleOp (kitbot)`, kept `@Disabled`, so it is
+  harmless until someone re-enables it, and then it is a bug.
 
-1. Smallest: pin one tag ID (this was the code review's original suggestion). Look up the
-   goal's tag ID in the game manual and use the tracker's `tagWithId(id)` (in
-   `LimelightHiveTracker.java`) instead of nearest-of-everything. The catch: the goal's
-   tag ID is alliance-specific, so one OpMode cannot know it -- the alliance has to be
-   TOLD, which is exactly why `2a`/`2b` and `9red`/`9blue` exist.
-2. Recommended, and the pattern everything else already follows: split `6. Shooter` into
-   a thin red/blue pair like `TankTeleOpRed`/`TankTeleOpBlue`. Move the body into a
-   `ShooterOpModeBase`, add `protected abstract HiveGeometry.Cell scoringCell()`, and
-   range on the MEAN of whichever member tags of that cluster are in view — the red
-   scoring cluster is ids 30-33, blue is 42-45 (`HiveGeometry.Cell`). Copy the
-   filter-and-mean from `ForwardOneAimAndShootAutoBase.aimAndShoot()` (the part that
-   builds `sumRange`/`nRange`), which already averages member ranges, skips tags
-   without a 3D pose, and falls back gracefully. A red robot then cannot range off a
-   blue or audience tag, and the alliance becomes a visible Driver Station choice.
+(`5. Shooter Calibrate` is separate and CORRECT as written: it ranges the single tag you
+set on the target stand, so "nearest" is exactly the tag on the goal. Leave it.)
 
-**How to check.** Bench, camera in its fiducial pipeline, launcher armed (hands clear of
-the muzzle). Put OUR goal's tags in view at, say, 60 in, and nearer in view put an
-AUDIENCE tag. The telemetry's range must read the ~60 in goal distance, not the near
-tag, and the asked speed must match the table row that ~60 in interpolates to. Also
-verify with only the audience tag in view: the OpMode should show NO RANGE rather than
-fire for an audience distance.
+**How to fix — a real decision per mode, not one answer for all three.** The rule that
+decides is the codebase's own: the alliance has to be TOLD, never inferred, so a mode with
+no alliance slot must not auto-range. Two ways out, and working code exists for both:
+
+1. Give the mode an alliance: split it into a thin red/blue pair exactly like
+   `TankTeleOpRed`/`TankTeleOpBlue` — move the body to a base class, add
+   `protected abstract HiveGeometry.Cell scoringCell()`, and range on the MEAN of the
+   goal cluster's member tags (copy `sumRange`/`nRange` from
+   `ForwardOneAimAndShootAutoBase.aimAndShoot()`, which averages the cluster's member
+   ranges and skips tags without a 3D pose).
+2. Or the opposite: if the mode never needs table-based speed on a match field, call
+   `shooter.fallBackToManual()` once at init — the same mechanism a camera-less robot
+   already uses — so it never uses the table and never ranges at all. The OpMode keeps
+   working as a fixed-speed rig.
+
+**How to check.** With the goal's tags in view at ~60 in and a NEARER audience tag also
+in view, the mode's range line must read ~60 in and its asked speed must match what the
+table says for ~60 in. With only the audience tag visible: an alliance-split mode shows
+no range and refuses; a manual-only one shows MANUAL and the dpad works.
 
 **When it is done:** delete this item in the same commit as any fix.
 
