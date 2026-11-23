@@ -3,7 +3,8 @@
 Things the robot or the code needs. Items 1–6 come from a code review on 2026-10-01;
 items 7–9 were added on 2026-10-19 by the work that split TeleOp and Autonomous by
 alliance, added the park, and put the Control Hub's IMU into the auto; item 10 was added
-on 2026-11-19 from the Limelight camera-calibration work. **These are for the
+on 2026-11-19 from the Limelight camera-calibration work, and item 11 on 2026-11-23 from
+field experience with the shoot-then-drive autos. **These are for the
 team to do** — each one says what is wrong, why it matters, where to look, and how to check
 your fix. The numbers are still the rough priority order; item 1, the safety issue, is
 done, and the rest keep their numbers because code comments reference them by number
@@ -233,6 +234,74 @@ already too busy to be read.
    camera's firmware actually does — that finding is worth more than the feature.
 4. Unplug the camera and run a drive OpMode: the robot must still drive, and INIT must
    not hang or crash for a missing camera or a missing file.
+
+**When it is done:** delete this item in the same commit as any fix.
+
+---
+
+## 11. Catch a misaligned autonomous start from the tags, BEFORE the HIVE tips and the tags are gone
+
+**What's wrong.** Autos 11/12 and 13/14 assume the robot is staged square on its tile and
+pointed where the path expects. Nothing measures that. If staging is off by a few degrees
+-- hand-pushed, wheels not square, carpet uneven -- every dead-reckoned leg inherits the
+error, and the parking endpoint, a zone only ~23 in wide, misses. The disabled aim-and-park
+autos already corrected for one heading error they caused themselves
+(`ForwardOneAimAndShootAutoBase.squareUp()`); no ENABLED auto checks the setup angle at all.
+
+**Why the estimate has to happen during shooting.** The HIVE is a seesaw: as the balls land
+in the cell we fire at, it tips about 60 deg, the tag clusters rotate with it, and they
+leave the camera's view. After that there is no second chance to measure. Whatever heading
+record we want must be captured while the tags are still in view -- during spin-up and the
+feed, before (or as) the last ball tips the HIVE -- and then survive in the run report for
+the parking legs to use.
+
+**Two camera signals are available, and they fail differently -- bench one, then decide:**
+
+1. **Bearing** (the cheap one, already computed elsewhere): the mean `txDeg` of OUR scoring
+   cluster. If staging were perfect this reads ~0 at START. It answers "how far left/right
+   of the goal am I pointed". It cannot see one case: the tag dead-center but viewed
+   obliquely.
+2. **Tag-plane rotation** (the idea worth testing): a tag seen straight-on presents its
+   plane at the known settled angle; seen from an angle, the image-space rotation of the
+   tag carries a residual that tx reports as ~0. The Limelight's fiducial result already
+   contains a 3D solve; `LimelightHiveTracker.Tag` carries txDeg/tyDeg/range/tilt/height
+   but NOT this in-image skew, so it needs a new field extracted in `toTag()`. If it turns
+   out noisy on a real CELL, write that down and use bearing alone -- a documented
+   limitation beats a guessed signal.
+
+Gate either signal on SETTLED observations (the `HiveGate` verdict `13/14` already
+produces in `waitForHigh()`), so a swinging CELL cannot feed a staging estimate.
+
+**What to do.**
+
+1. **Latch it while the tags are visible.** In `13/14` the hook is `waitForHigh()` (tags in
+   view for up to 20 s); in `11/12` the OpMode has no tracker at all yet, so constructing
+   one at init is part of this item. Capture once, record into the existing `log.row()` run
+   report ("staging=+4.2deg"), and keep it for the park.
+2. **Then pick a policy per magnitude** (start with: <= 3 deg just record; larger, act --
+   3 deg over a 96 in leg is ~5 in of drift, about a quarter of the zone):
+   (a) STRAIGHTEN: rotate by the estimate right after capture, before or during spin-up --
+   the drive is idle then anyway; or
+   (b) FIX THE PARK: leave the robot alone and fold the correction into the first parking
+   turn (90 deg becomes 90+corr) so the endpoint lands despite the crooked start. (a) is
+   safer to reason about; (b) is what "pick a better angle for the parking routine" means
+   and avoids turning a moving robot while the wheel is spinning up.
+3. **Keep it in one place, split by job.** Reading the angle is camera work --
+   `LimelightHiveTracker` -- and the policy is field strategy -- the auto. Do not copy the
+   loop into each OpMode; two enabled autos sharing one helper is what stopped red and
+   blue from diverging.
+
+**How to check.**
+
+1. Bench: stage the robot visibly crooked (~5 deg off the HIVE line), tags in view, and
+   confirm the telemetry/report reads ~5. Straight-on staging must read ~0.
+2. Tip the CELL by hand (or shoot real balls) and confirm the captured angle SURVIVED in
+   the report after the tags are gone -- that is the whole point of the latch.
+3. Floor: run `11` with a deliberately crooked start and compare the endpoint to the
+   report's angle. Across a ~96 in path, error should track tan(angle) x distance -- 5 deg
+   ~= 8 in. If it does not, the angle or the correction leg is wrong.
+4. Confirm nothing blocks the run: no tags (camera absent or CELL empty from the previous
+   match) must degrade to "staging=unmeasured" and run exactly as today, never hang.
 
 **When it is done:** delete this item in the same commit as any fix.
 
