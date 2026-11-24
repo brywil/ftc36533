@@ -58,7 +58,9 @@ import java.util.Locale;
  *      FEED_MAX_MS -- the stutters keep the first shots consistent, the continuous run
  *      clears the rest of the hopper. After the FIRST pulse, one backwards pulse of
  *      the same length runs the windmill the other way to pull the next ball out of
- *      the feed throat; the normal gap and pulse train then continue unchanged;
+ *      the feed throat; the normal gap and pulse train then continue unchanged. THE
+ *      GATE IS HELD OPEN FOR THE WHOLE PHASE (holdGateOpen), so the windmill's pulses
+ *      do not pump the servo open and closed;
  *   4. drive at 50% power: forward 1, left 90, forward 1, right 90, forward 2.1,
  *      left 90, forward 1, then reverse 0.1;
  *   5. stop and report.
@@ -289,6 +291,13 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
         boolean pulsing = true;
         boolean reversing = false;   // the one backwards pulse after pulse 1
         boolean continuous = false;
+
+        // THE GATE OPENS ONCE, FOR THE WHOLE FEED PHASE. The pulses below start and stop
+        // the windmill several times in the first second, and setFeed() normally makes
+        // the gate follow the windmill -- so the servo used to slam open/closed on every
+        // pulse. Hold it open here instead; the windmill keeps its pulse train, and the
+        // gate only closes when the hold is released after the loop.
+        shooter.shooter().holdGateOpen(true);
         shooter.shooter().setFeed(1.0);
 
         while (opModeIsActive()) {
@@ -339,8 +348,9 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
                     : pulsing ? "stutter " + pulsesDone + "/" + FEED_SMALL_PULSE_COUNT
                     : reversing ? "reversing after pulse 1"
                     : (recovered ? "recovered" : "recovering");
-            telemetry.addData("feed phase", "%d / %d ms  %s  (intake on)",
-                    fed, FEED_MAX_MS, state);
+            telemetry.addData("feed phase", "%d / %d ms  %s  gate %s  (intake on)",
+                    fed, FEED_MAX_MS, state,
+                    shooter.shooter().isGateOpen() ? "OPEN" : "closed");
             telemetry.addData("  launcher", "asked %.0f  actual %.0f ticks/s  power %+.2f  %s",
                     asked, actual, shooter.shooter().getLauncherPower(),
                     shooter.isSpunUp() ? "READY" : "SLOW");
@@ -357,6 +367,9 @@ public abstract class ShootThenDriveAutoBase extends LinearOpMode {
                     num(shooter.shooter().getLauncherPower()), "", "", "", "");
             idle();
         }
+        // Release the gate hold BEFORE stopping the feed, so the gate follows setFeed()
+        // again from here on (the teleop depends on that). setFeed(0) then closes it.
+        shooter.shooter().holdGateOpen(false);
         shooter.shooter().setFeed(0.0);
         intake.stop();
         shooter.stop();

@@ -27,7 +27,9 @@ import java.util.Locale;
  * THE GATE. Open = 1.0, closed = 0.5. 0.5 is the correct closed position on this robot,
  * so the open direction is the OTHER side of it, toward 1.0. It is closed at init and
  * opens only for a FORWARD feed; zero or reverse leaves it closed. Every OpMode feeds
- * through setFeed(), so no caller can forget it.
+ * through setFeed(), so no caller can forget it. An auto that PULSES the windmill uses
+ * {@link #holdGateOpen(boolean)} so the gate opens once for the whole feed instead of
+ * pumping open/closed on every pulse.
  *
  * WHY VELOCITY, NOT POWER.
  *
@@ -121,6 +123,15 @@ public class Shooter {
 
     /** True after the gate has been commanded open; avoids re-sending it every loop. */
     private boolean gateOpen = false;
+
+    /**
+     * True while a caller has asked the gate to stay open whatever setFeed() is doing.
+     * See {@link #holdGateOpen(boolean)}.
+     */
+    private boolean gateLatched = false;
+
+    /** Whether the last setFeed() asked for a FORWARD feed. Drives the gate when unlatched. */
+    private boolean feedForward = false;
 
     /** Battery voltage sensor, if this hub has one. Only used to record calibration conditions. */
     private final VoltageSensor battery;
@@ -233,7 +244,35 @@ public class Shooter {
     public void setFeed(double power) {
         double p = clamp(power);
         if (windmill != null) windmill.setPower(p);
-        setGate(p > 0.0);
+        feedForward = p > 0.0;
+        applyGate();
+    }
+
+    /**
+     * Hold the gate OPEN (or let go of it again) independently of setFeed().
+     *
+     * THE GATE IS A SESSION, NOT A PULSE. An auto that stutters the windmill -- on, off,
+     * on, off -- used to slam the gate servo through its full travel on every pulse,
+     * four or five times in a second: audible pumping, a lot of unnecessary servo work,
+     * and no benefit, because once we have decided this robot is shooting, the gate
+     * should simply be out of the way until the feed phase ends.
+     *
+     * While held, setFeed() still runs the windmill (forward, reverse, stop) but leaves
+     * the gate alone. The gate opens on the first call, stays open through the pulses
+     * and the gaps between them, and goes back to following setFeed() when the hold is
+     * released -- so with the feed stopped it closes. Releasing is what puts the safety
+     * back: after this, setFeed() controls the gate again as usual.
+     *
+     * @param hold true = open now and stay open; false = back to following setFeed().
+     */
+    public void holdGateOpen(boolean hold) {
+        gateLatched = hold;
+        applyGate();
+    }
+
+    /** Open while either the hold is on or the current feed is forward. */
+    private void applyGate() {
+        setGate(gateLatched || feedForward);
     }
 
     private void setGate(boolean open) {
@@ -242,8 +281,9 @@ public class Shooter {
         gateOpen = open;
     }
 
-    /** Everything off. Call when the OpMode ends; this also closes the gate. */
+    /** Everything off. Call when the OpMode ends; this also releases the hold and closes the gate. */
     public void stop() {
+        gateLatched = false;
         stopLauncher();
         setFeed(0);
     }
