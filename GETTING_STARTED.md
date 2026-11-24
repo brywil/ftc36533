@@ -120,7 +120,6 @@ rollers set at an angle, is mecanum. Two motors, one per side, is tank.
 | Right corner intake servo | `right_intake_servo` |
 | Launcher (shooter) motor | `launcher` |
 | Feed servo (windmill) | `windmill` |
-| Shooter safety gate servo | `shooter_gate` |
 | The Control Hub's built-in IMU | `imu` |
 | The camera (if you have one plugged in) | `Webcam 1` |
 
@@ -135,7 +134,6 @@ rollers set at an angle, is mecanum. Two motors, one per side, is tank.
 | Right corner intake servo | `right_intake_servo` |
 | Launcher (shooter) motor | `launcher` |
 | Feed servo (windmill) | `windmill` |
-| Shooter safety gate servo | `shooter_gate` |
 | The camera (if you have one plugged in) | `Webcam 1` |
 
 The kitbot does **not** need the `imu`. Leave it out — tank drive doesn't use it.

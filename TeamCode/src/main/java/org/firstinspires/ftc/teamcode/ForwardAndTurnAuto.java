@@ -189,7 +189,6 @@ public class ForwardAndTurnAuto extends LinearOpMode {
         telemetry.addData("turn", "%d ticks (%.0f deg)", turnTicks, TURN_DEG);
         telemetry.addData("launcher", shooter.hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.hasWindmill() ? "OK" : "MISSING");
-        telemetry.addData("gate", shooter.hasGate() ? "OK" : "MISSING");
         telemetry.addLine();
         telemetry.addLine("If these are wrong, the geometry constants at the");
         telemetry.addLine("top of ForwardAndTurnAuto.java need measuring.");

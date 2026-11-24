@@ -126,7 +126,6 @@ front_left   front_right   back_left   back_right      DcMotor
 intake                                                 DcMotor
 launcher                                               DcMotorEx (encoder)
 left_intake_servo   right_intake_servo   windmill       CRServo
-shooter_gate                                           Servo (positional)
 imu                                                    built into the Control Hub
 limelight                                              Ethernet Device -> Limelight3A
 ```
@@ -158,7 +157,6 @@ left_drive   right_drive                              DcMotor
 intake                                                 DcMotor
 launcher                                               DcMotorEx (encoder)
 left_intake_servo   right_intake_servo   windmill       CRServo
-shooter_gate                                           Servo (positional)
 limelight                                              Ethernet Device -> Limelight3A
 ```
 
@@ -198,10 +196,8 @@ exist on the StarterBot and were silently inert; they are gone.
 
 ### The launcher (shooter)
 
-`Shooter` owns the launcher (`launcher`), the feed servo (`windmill`), and the safety
-gate (`shooter_gate`). The gate is a positional servo: it stays closed (left limit,
-`0.0`) unless the windmill is feeding forward, then it opens (right limit, `1.0`). It
-turns a distance into a launcher **speed** so a shot travels that far. Run
+`Shooter` owns the launcher (`launcher`) and the feed servo (`windmill`). It turns a
+distance into a launcher **speed** so a shot travels that far. Run
 `5. Shooter Calibrate` to measure the distance→speed points, then `6. Shooter
 (Limelight)` to shoot using them.
 
@@ -273,11 +269,6 @@ into a turn command that centers the tag. `7. Auto Aim (AprilTag)` applies that 
 drivetrain: the driver keeps the left stick, and the aim controller owns the turn axis
 only. Run it standalone first — the one thing you must see, not reason about, is
 whether the robot turns the **right way** toward the tag.
-
-In the match modes (`2a`/`2b` and `9red`/`9blue`) the target is not one tag: it is the
-group of our SCORING CELL's tags. When the tilt/height gate says that CELL is the one
-that is UP, the target becomes the middle of the HIVE — the midpoint of the two CELL
-cluster means — so the shot is not pulled toward the high CELL's sticker.
 
 **A lost target is a safety case.** When the tag leaves the frame the bearing does not
 exist, so the controller stops rather than turning on the last angle it saw. That

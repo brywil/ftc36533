@@ -106,7 +106,6 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
         telemetry.addData("watch cell", scoringCell().clusterName);
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
-        telemetry.addData("gate", shooter.shooter().hasGate() ? "OK" : "MISSING");
         telemetry.update();
 
         waitForStart();

@@ -57,7 +57,6 @@ public class LaunchOnlyAuto extends LinearOpMode {
         telemetry.addLine("WHEELS OFF THE GROUND for the first run.");
         telemetry.addData("launcher", shooter.hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.hasWindmill() ? "OK" : "MISSING");
-        telemetry.addData("gate", shooter.hasGate() ? "OK" : "MISSING");
         telemetry.update();
 
         waitForStart();

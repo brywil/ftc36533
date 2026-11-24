@@ -27,18 +27,18 @@ Hub's 4 motor ports, and servos use the separate servo ports.
                    (all left)   (all right)   (roller)   (flywheel,
                                                            ENCODER cable)
 
-   servos              S0              S1                S2              S3
-                         |               |                 |               |
-                left_intake_servo  right_intake_servo   windmill     shooter_gate
-                (corner assist)    (corner assist)      (feeds balls  (blocks the
-                                                          into launcher) ball path)
+   servos              S0              S1                S2
+                         |               |                 |
+                left_intake_servo  right_intake_servo   windmill
+                (corner assist)    (corner assist)      (feeds balls
+                                                          into launcher)
 
    Limelight 3A  --USB-C-->  Control Hub USB port.
                              Configure as: Ethernet Device -> Limelight 3A,
                              named "limelight".
 ```
 
-That is every device: 4 motors, 4 servos, 1 camera. If you also have a webcam for the
+That is every device: 4 motors, 3 servos, 1 camera. If you also have a webcam for the
 webcam HIVE path, it plugs into another USB port and is named `Webcam 1`.
 
 ### What each device is
@@ -52,7 +52,6 @@ webcam HIVE path, it plugs into another USB port and is named `Webcam 1`.
 | `left_intake_servo` | CR servo | pulls POLLEN from corners |
 | `right_intake_servo` | CR servo | pulls POLLEN from corners |
 | `windmill` | CR servo | feeds balls into the launcher |
-| `shooter_gate` | Servo (positional) | blocks the ball path; opens only while feeding |
 | `limelight` | Limelight 3A | AprilTags / the ball detector |
 | `imu` | built in | only needed by the mecanum practice bot; the tank base ignores it |
 
@@ -97,11 +96,6 @@ the wrong port entirely):
 | `right_intake_servo` | **reversed** | `Intake.RIGHT_SERVO_REVERSE` |
 | `windmill` | **reversed** | `Shooter.WINDMILL_REVERSE` |
 | `left_drive`, `intake`, `launcher`, `left_intake_servo` | forward | — |
-
-The gate is a **positional** servo, not a CR servo, so it has no direction to reverse:
-the **left limit is closed** (`Shooter.GATE_CLOSED_POSITION = 0.0`) and the **right limit
-is open** (`Shooter.GATE_OPEN_POSITION = 1.0`). Swap those two values if the linkage is
-ever flipped.
 
 Test on blocks first: left stick forward, **both wheels must spin forward**
 (`GETTING_STARTED.md` Part 3).
