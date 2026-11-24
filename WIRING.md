@@ -99,9 +99,9 @@ the wrong port entirely):
 | `left_drive`, `intake`, `launcher`, `left_intake_servo` | forward | — |
 
 The gate is a **positional** servo, not a CR servo: **open is `0.0`**
-(`Shooter.GATE_OPEN_POSITION`) and **closed is `0.4`**
-(`Shooter.GATE_CLOSED_POSITION`). The gate only uses the first 40% of the servo travel,
-and `0.4` keeps it off the mechanical stop.
+(`Shooter.GATE_OPEN_POSITION`) and **closed is `0.5`**
+(`Shooter.GATE_CLOSED_POSITION`). The gate only uses the first half of the servo travel,
+and `0.5` keeps it off the mechanical stop.
 
 Test on blocks first: left stick forward, **both wheels must spin forward**
 (`GETTING_STARTED.md` Part 3).
