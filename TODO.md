@@ -380,6 +380,23 @@ above was wrong and the item is not done.
    -- the voltage readout already exists in `Shooter` -- but only with a bench
    measurement behind it, for the same reason as the table rows.
 
+8. **Option B: do the same fix in code instead of firmware** -- the drivers' manual
+   routine is already an outer integral loop, so it can be a naive one:
+   every ~0.5 s, if `actual` has been below `asked`, add a small step (1-2% of the target)
+   to a `droopCompensation` offset and pass `asked + offset` to
+   `Shooter.setVelocity`; if `actual` climbs above `asked`, take a step back down.
+   Three rules make it safe:
+   (a) CAP the offset (e.g. +-100 ticks/s) and RESET it when the base target changes,
+   the feed ends, or the launcher disarms -- a software integrator winds up forever
+   unless we own the unwind;
+   (b) SHOW the offset separately in telemetry, next to (not inside) the asked line;
+   (c) a recorded calibration point must carry the BASE speed, never the base plus
+   offset -- otherwise battery droop bakes itself into the table, which is exactly how
+   the low-battery rows in item 9 got their error. Option A is invisible but is one
+   constant; Option B is visible, loggable in the run report, and can be gated to engage
+   only below a chosen battery voltage -- pick by which failure you would rather debug
+   at a venue.
+
 **When it is done:** delete this item in the same commit as any fix.
 
 ---
