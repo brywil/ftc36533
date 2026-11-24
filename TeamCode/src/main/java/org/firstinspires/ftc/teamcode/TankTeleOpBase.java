@@ -345,7 +345,7 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                     lastAimHigh ? "   [HIGH CELL centre]" : "");
             telemetry.addData("shoot", shooting ? "FIRING (intake + feed)" : "off (hold RB)");
             telemetry.addData("gate", shooter.shooter().hasGate()
-                    ? (shooter.shooter().isGateOpen() ? "OPEN (0.0)" : "CLOSED (0.5)")
+                    ? (shooter.shooter().isGateOpen() ? "OPEN (1.0)" : "CLOSED (0.5)")
                     : "MISSING");
             telemetry.addLine();
             telemetry.addLine("Left stick drives.  RT = auto-aim only, RB = auto-aim + shoot.");

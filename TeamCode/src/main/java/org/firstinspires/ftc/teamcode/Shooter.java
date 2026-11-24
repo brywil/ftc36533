@@ -24,10 +24,10 @@ import java.util.Locale;
  * with an encoder, so -- unlike the rest of the robot -- this mechanism is CLOSED LOOP.
  * The windmill is a continuous-rotation servo; the gate is a positional servo.
  *
- * THE GATE. Open = 0.0, closed = 0.5. The gate only uses the first half of the servo's
- * travel, and 0.5 keeps it off the mechanical stop. It is closed at init and opens only
- * for a FORWARD feed; zero or reverse leaves it closed. Every OpMode feeds through
- * setFeed(), so no caller can forget it.
+ * THE GATE. Open = 1.0, closed = 0.5. 0.5 is the correct closed position on this robot,
+ * so the open direction is the OTHER side of it, toward 1.0. It is closed at init and
+ * opens only for a FORWARD feed; zero or reverse leaves it closed. Every OpMode feeds
+ * through setFeed(), so no caller can forget it.
  *
  * WHY VELOCITY, NOT POWER.
  *
@@ -61,12 +61,12 @@ public class Shooter {
     private static final boolean WINDMILL_REVERSE = true;   // goBILDA's kit reverses it
 
     /**
-     * Gate endpoints, measured on this robot: OPEN is 0.0, CLOSED is 0.5. The gate's
-     * usable travel is only the first half of the servo range; 0.5 keeps it off the
-     * mechanical stop. If it does not quite block when closed, raise the closed value;
-     * if it does not quite clear the ball when open, lower the open value.
+     * Gate endpoints, measured on this robot: CLOSED is 0.5. The open direction is the
+     * other side of 0.5, so OPEN is 1.0. FTC servo positions are clamped to 0.0..1.0;
+     * a negative position is not usable. If it does not quite block when closed, raise
+     * the closed value; if it does not quite clear when open, adjust the open value.
      */
-    public static final double GATE_OPEN_POSITION   = 0.0;
+    public static final double GATE_OPEN_POSITION   = 1.0;
     public static final double GATE_CLOSED_POSITION = 0.5;
 
     /**
