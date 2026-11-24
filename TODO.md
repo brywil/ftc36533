@@ -325,7 +325,7 @@ sagging below `asked` as the battery ran down.
 | what the telemetry shows | what it is | what fixes it |
 |---|---|---|
 | `actual` dips on ball contact and recovers slowly or softly, on a HEALTHY battery | loop bandwidth -- the gains | tune F and P below |
-| `actual` sits below `asked` only while the battery is low, closing the gap when a fresh pack goes in | SATURATION -- the hub is already commanding all the power it can | no gains fix this. Fresh battery, or a lower target. Record the truth in a comment and move on |
+| `actual` sits below `asked` only while the battery is low | NOT necessarily saturation. If pushing the power up BY HAND makes it hold -- the drivers found exactly this -- the pack still has headroom, and the missing piece is the I term (step 7). If even that cannot hold the speed, it is true saturation: fresh battery or a lower target |
 
 The calibrate OpMode's warning line ("WHEEL CANNOT REACH asked", at `actual < 0.95 x
 asked`) is the existing detector for the second case. No tuning session is valid while
@@ -349,8 +349,8 @@ re-disable it after):**
    needs: raise P in ~50% steps, re-run the baseline, compare. Two signs of too much P:
    overshoot/ringing at spin-up (the wheel passes its target and oscillates), and twitchy
    `actual` between balls. Back off to the last quiet setting.
-5. **Leave I and D at 0.** They are 0 deliberately; adding two unknowns mid-session is
-   how tuning becomes debugging.
+5. **Keep D at 0, and I at 0 until step 7 says otherwise.** They are 0 deliberately;
+   adding unknowns mid-session is how tuning becomes debugging.
 6. **Write it down in the standard now set:** beside the constants go the new values,
    the battery voltage, the flywheel weight, and the date -- the same culture the
    calibration table adopted with its per-row voltage comments. An unlabelled number is
@@ -366,6 +366,19 @@ and `actual` must return to `asked` between balls. Then repeat with the tired pa
 sag under load is physics, but a *steady* offset below `asked` at a HEALTHY battery is a
 gain problem -- and the reverse split has to hold too, or the distinction in the table
 above was wrong and the item is not done.
+
+7. **The automatable version of the drivers' power bump: the I term.** Raising the power
+   by hand on a low battery, shot after shot, is a job for a controller, and the I term
+   is exactly that job: it raises the POWER continuously while `actual` sits below
+   `asked`, without touching the target, so the target stays the true table speed. Set
+   `PIDF_I` (0.0 today, `Shooter.java` line 63) small -- a first step is about
+   `P/1000` (0.04), then step by 3x, judged only from the baseline feeds. Pass test: on
+   the TIRED pack, `actual` must close to `asked` by itself, between balls, with no
+   driver input, and must not overshoot badly after a deep dip. If I winds up and
+   overshoots, back it off; if it cannot be made stable at all, the fallback is
+   voltage-compensated feed-forward: scale the F feed by `NOMINAL_V / getBatteryVoltage()`
+   -- the voltage readout already exists in `Shooter` -- but only with a bench
+   measurement behind it, for the same reason as the table rows.
 
 **When it is done:** delete this item in the same commit as any fix.
 
