@@ -5,6 +5,8 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -336,10 +338,11 @@ public abstract class TankTeleOpBase extends LinearOpMode {
             telemetry.addData("feed", shooter.feedState());
             telemetry.addData("limelight", tracker.linkText());
             telemetry.addData("aim", aimText(aimAvailable, aimHeld, bearing, aimCommand));
-            telemetry.addData("aim cluster", "%s   %d of %d tags   frame %s   smoothed %s",
+            telemetry.addData("aim cluster", "%s   %d of %d tags   frame %s   smoothed %s%s",
                     lastAimCell == null ? "--" : lastAimCell.clusterName,
                     lastClusterMembers, HiveGeometry.CLUSTER_MEMBER_COUNT,
-                    deg(lastFrameBearingDeg), deg(bearing));
+                    deg(lastFrameBearingDeg), deg(bearing),
+                    lastAimCenter ? "   [HIVE centre]" : "");
             telemetry.addData("shoot", shooting ? "FIRING (intake + feed)" : "off (hold RB)");
             telemetry.addLine();
             telemetry.addLine("Left stick drives.  RT = auto-aim only, RB = auto-aim + shoot.");
@@ -397,43 +400,61 @@ public abstract class TankTeleOpBase extends LinearOpMode {
     private Double bearingToHive(LimelightHiveTracker tracker, long now) {
         HiveGeometry.Cell primary = scoringCell();
         HiveGeometry.Cell fallback = primary.opposite();
+        List<LimelightHiveTracker.Tag> primaryTags = new ArrayList<>();
+        List<LimelightHiveTracker.Tag> fallbackTags = new ArrayList<>();
         double primarySum = 0.0, fallbackSum = 0.0;
-        int primaryFound = 0, fallbackFound = 0;
 
         for (LimelightHiveTracker.Tag t : tracker.recognize()) {
             if (t.cell == primary) {
+                primaryTags.add(t);
                 primarySum += t.txDeg;
-                primaryFound++;
             } else if (t.cell == fallback) {
+                fallbackTags.add(t);
                 fallbackSum += t.txDeg;
-                fallbackFound++;
             }
         }
 
+        int primaryFound = primaryTags.size();
+        int fallbackFound = fallbackTags.size();
+
         HiveGeometry.Cell chosen;
-        double sum;
+        double frameBearing;
         int found;
+        boolean center = false;
         if (primaryFound > 0) {
             chosen = primary;
-            sum = primarySum;
             found = primaryFound;
+            frameBearing = primarySum / primaryFound;
+
+            // If OUR scoring CELL is the one that is UP, aim at the middle of the HIVE,
+            // not at the middle of that CELL's sticker. The two CELLs hang either side
+            // of the pivot, so the midpoint of their cluster means is the HIVE centre.
+            // This uses the tag IDs (which CELL each tag belongs to) and the tilt/height
+            // knowledge of which CELL is up -- not a blind average of every tag in view.
+            HiveGeometry.Slot slot = LimelightHiveTracker.knownSlot(primaryTags);
+            if (slot == HiveGeometry.Slot.HIGH && fallbackFound > 0) {
+                frameBearing = (frameBearing + fallbackSum / fallbackFound) / 2.0;
+                center = true;
+            }
         } else if (fallbackFound > 0) {
             chosen = fallback;
-            sum = fallbackSum;
             found = fallbackFound;
+            frameBearing = fallbackSum / fallbackFound;
         } else {
             lastClusterMembers = 0;
             lastFrameBearingDeg = null;
+            lastAimCenter = false;
             if (now - lastClusterFrameMs > AIM_SMOOTH_RESET_MS) clearAimSmoothing();
             return null;
         }
 
-        if (chosen != lastAimCell) {
+        if (chosen != lastAimCell || center != lastAimCenter) {
             clearAimSmoothing();
             lastAimCell = chosen;
+            lastAimCenter = center;
         }
         lastClusterMembers = found;
-        lastFrameBearingDeg = sum / found;
+        lastFrameBearingDeg = frameBearing;
         bearingWin[bearingNext] = lastFrameBearingDeg;
         bearingNext = (bearingNext + 1) % AIM_SMOOTH_FRAMES;
         if (bearingCount < AIM_SMOOTH_FRAMES) bearingCount++;
@@ -476,6 +497,9 @@ public abstract class TankTeleOpBase extends LinearOpMode {
     /** Which side of our HIVE supplied the last bearing; null when none was in view. */
     private HiveGeometry.Cell lastAimCell = null;
 
+    /** True when the last bearing was the HIVE centre because the scoring CELL was up. */
+    private boolean lastAimCenter = false;
+
     private Double lastRangeIn = null;
     private long lastRangeMs = 0L;
 
@@ -503,6 +527,7 @@ public abstract class TankTeleOpBase extends LinearOpMode {
         bearingNext = 0;
         lastFrameBearingDeg = null;
         lastAimCell = null;
+        lastAimCenter = false;
         lastClusterMembers = 0;
     }
 

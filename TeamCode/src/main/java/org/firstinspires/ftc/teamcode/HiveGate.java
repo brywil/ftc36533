@@ -89,4 +89,16 @@ public final class HiveGate {
         }
         return HiveGeometry.Slot.UNKNOWN;
     }
+
+    /**
+     * The slot implied by tilt and height when the two AGREE, without the full-cluster
+     * requirement of {@link #evaluate}. Aim uses this to know which CELL is up even when
+     * only some of the four tags are visible; localization keeps the strict gate.
+     */
+    public static HiveGeometry.Slot knownSlot(double tiltDeg, double heightIn) {
+        HiveGeometry.Slot byHeight = slotFromHeight(heightIn);
+        HiveGeometry.Slot byTilt = slotFromTilt(tiltDeg);
+        return (byHeight != HiveGeometry.Slot.UNKNOWN && byHeight == byTilt)
+                ? byHeight : HiveGeometry.Slot.UNKNOWN;
+    }
 }

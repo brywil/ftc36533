@@ -243,6 +243,29 @@ public class LimelightHiveTracker {
     }
 
     /**
+     * Which slot the given CELL is in, from the mean tilt and height of whichever of its
+     * tags are visible. This deliberately does NOT require the full cluster: aim only
+     * needs to know whether the CELL it is looking at is the one that is up. When the two
+     * measurements do not agree the slot is UNKNOWN and callers keep their old aim.
+     */
+    public static HiveGeometry.Slot knownSlot(List<Tag> tags) {
+        double sumTilt = 0.0, sumHeight = 0.0;
+        int nTilt = 0, nHeight = 0;
+        for (Tag t : tags) {
+            if (!Double.isNaN(t.tiltDeg)) {
+                sumTilt += t.tiltDeg;
+                nTilt++;
+            }
+            if (!Double.isNaN(t.heightIn)) {
+                sumHeight += t.heightIn;
+                nHeight++;
+            }
+        }
+        if (nTilt == 0 || nHeight == 0) return HiveGeometry.Slot.UNKNOWN;
+        return HiveGate.knownSlot(sumTilt / nTilt, sumHeight / nHeight);
+    }
+
+    /**
      * One Observation per HIVE cluster currently in view, settled or not.
      * Callers that only want fixes should filter on {@link Observation#settled};
      * the bench OpMode wants the rejects too, which is why they are returned.
