@@ -4,7 +4,8 @@ Things the robot or the code needs. Items 1–6 come from a code review on 2026-
 items 7–9 were added on 2026-10-19 by the work that split TeleOp and Autonomous by
 alliance, added the park, and put the Control Hub's IMU into the auto; item 10 was added
 on 2026-11-19 from the Limelight camera-calibration work, and item 11 on 2026-11-23 from
-field experience with the shoot-then-drive autos. **These are for the
+field experience with the shoot-then-drive autos; item 12 on 2026-11-24 after the flywheel
+was weighted and a speed droop was noticed on a run-down battery. **These are for the
 team to do** — each one says what is wrong, why it matters, where to look, and how to check
 your fix. The numbers are still the rough priority order; item 1, the safety issue, is
 done, and the rest keep their numbers because code comments reference them by number
@@ -304,6 +305,67 @@ produces in `waitForHigh()`), so a swinging CELL cannot feed a staging estimate.
    ~= 8 in. If it does not, the angle or the correction leg is wrong.
 4. Confirm nothing blocks the run: no tags (camera absent or CELL empty from the previous
    match) must degrade to "staging=unmeasured" and run exactly as today, never hang.
+
+**When it is done:** delete this item in the same commit as any fix.
+
+---
+
+## 12. Measure the launcher's PIDF gains — the wheel has been weighted, and the numbers are still goBILDA's
+
+**What's wrong.** The launcher's speed loop was copied from goBILDA's BIOBUZZ example and
+has never been measured on this robot: `PIDF_P = 40.0`, `PIDF_F = 12.5`, `I = D = 0`
+(`Shooter.java` lines 62-65, applied at 135-137). Since then the flywheel has had weight
+added, which changes the job: a heavier wheel dips LESS when a ball takes its energy but
+recovers SLOWER, so the response of the loop needs re-measuring against inertia that did
+not exist when the numbers were written. The symptom that started this item: `actual`
+sagging below `asked` as the battery ran down.
+
+**FIRST, for one session, tell the two droop causes apart. Only one is tuning:**
+
+| what the telemetry shows | what it is | what fixes it |
+|---|---|---|
+| `actual` dips on ball contact and recovers slowly or softly, on a HEALTHY battery | loop bandwidth -- the gains | tune F and P below |
+| `actual` sits below `asked` only while the battery is low, closing the gap when a fresh pack goes in | SATURATION -- the hub is already commanding all the power it can | no gains fix this. Fresh battery, or a lower target. Record the truth in a comment and move on |
+
+The calibrate OpMode's warning line ("WHEEL CANNOT REACH asked", at `actual < 0.95 x
+asked`) is the existing detector for the second case. No tuning session is valid while
+it is lit.
+
+**How to tune (one knob at a time; re-enable `5. Shooter Calibrate` for the session,
+re-disable it after):**
+
+1. **Baseline, nothing changed.** Fresh battery, wheel at a known speed, feed five balls
+   one at a time. From the "wheel ... asked ... actual" line, write down per ball: dip
+   depth and the time to return to `asked`. This table of numbers is what every change
+   is judged against.
+2. **Drag check on the added weight.** Power OFF, spin the wheel by hand, time the
+   coast-down. Inertia alone should make dips SMALLER and recoveries slower -- so if the
+   weighted wheel now dips MORE than the unweighted one did, the weight added friction
+   (bearing drag, an off-balance wheel), and that is a mechanical fix, not a gain.
+3. **F is the steady-state knob.** If `actual` parks a little below `asked` at rest on a
+   healthy battery, the P term is carrying what feed-forward should. Raise F in 10-20%
+   steps.
+4. **P is the recovery knob.** Only if per-ball recovery is slower than the feed pace
+   needs: raise P in ~50% steps, re-run the baseline, compare. Two signs of too much P:
+   overshoot/ringing at spin-up (the wheel passes its target and oscillates), and twitchy
+   `actual` between balls. Back off to the last quiet setting.
+5. **Leave I and D at 0.** They are 0 deliberately; adding two unknowns mid-session is
+   how tuning becomes debugging.
+6. **Write it down in the standard now set:** beside the constants go the new values,
+   the battery voltage, the flywheel weight, and the date -- the same culture the
+   calibration table adopted with its per-row voltage comments. An unlabelled number is
+   exactly the failure that low-battery calibration taught us about.
+
+Also worth writing down while the wheel is off the robot's schedule: the weighted wheel
+takes LONGER to spin up. If the autos' `SPIN_UP_MAX_WAIT_MS` windows or the feed pace
+start looking tight in the run reports, that shows up here as feeds beginning on a wheel
+that never reported READY.
+
+**How to check.** Same distance as a calibrated table row, several balls: shots must land,
+and `actual` must return to `asked` between balls. Then repeat with the tired pack: some
+sag under load is physics, but a *steady* offset below `asked` at a HEALTHY battery is a
+gain problem -- and the reverse split has to hold too, or the distinction in the table
+above was wrong and the item is not done.
 
 **When it is done:** delete this item in the same commit as any fix.
 
