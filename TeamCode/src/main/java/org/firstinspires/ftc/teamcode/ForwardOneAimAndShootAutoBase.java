@@ -310,6 +310,7 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
                 : "not in config -- parking dead-reckons from the wheels");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
+        telemetry.addData("gate", shooter.shooter().hasGate() ? "OK" : "MISSING");
         telemetry.addData("table", Shooter.RANGE_VELOCITY_TABLE.length
                 + " points -- one speed (%.0f) for every distance",
                 Shooter.RANGE_VELOCITY_TABLE[0][1]);

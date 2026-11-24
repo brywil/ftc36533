@@ -6,6 +6,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -56,6 +57,15 @@ public class HardwareCheck extends LinearOpMode {
             "left_intake_servo", "right_intake_servo", "windmill",
     };
 
+    /**
+     * Positional servos. These are commanded to an angle rather than spun, so they get
+     * their own list: holding A swings the gate to its OPEN limit and letting go returns
+     * it to CLOSED, which is the same motion the match code uses.
+     */
+    private static final String[] ATTACHMENT_POSITION_SERVOS = {
+            Shooter.GATE,
+    };
+
     @Override
     public void runOpMode() {
         // foundNames and foundMotors are kept PARALLEL: only devices that were actually
@@ -69,6 +79,9 @@ public class HardwareCheck extends LinearOpMode {
         // index, so one device is moving at a time whether it is a motor or a servo.
         List<String> foundServoNames = new ArrayList<>();
         List<CRServo> foundServos = new ArrayList<>();
+
+        List<String> foundPositionServoNames = new ArrayList<>();
+        List<Servo> foundPositionServos = new ArrayList<>();
 
         // What does the configuration actually contain? This is the ground truth --
         // if a name is not in this list, the code can never find it, no matter how
@@ -125,19 +138,33 @@ public class HardwareCheck extends LinearOpMode {
             }
         }
 
+        // Positional servos: the gate. tryGet(Servo.class) returns null if the name is
+        // configured as a CR servo instead, so this also catches the wrong servo type.
+        for (String name : ATTACHMENT_POSITION_SERVOS) {
+            Servo s = hardwareMap.tryGet(Servo.class, name);
+            if (s != null) {
+                foundPositionServoNames.add(name + " (position servo)");
+                foundPositionServos.add(s);
+            } else {
+                missingNames.add(name + " -- name it \"" + name + "\" as a Servo");
+            }
+        }
+
         IMU imu = hardwareMap.tryGet(IMU.class, "imu");
 
         telemetry.addLine("=== WHAT THE CONFIGURATION CONTAINS ===");
         telemetry.addLine(inConfig.length() == 0 ? "  (no motors at all!)" : "  " + inConfig);
         telemetry.addLine();
         telemetry.addLine("=== WHAT THIS CODE FOUND ===");
-        if (foundNames.isEmpty() && foundServoNames.isEmpty()) {
+        if (foundNames.isEmpty() && foundServoNames.isEmpty()
+                && foundPositionServoNames.isEmpty()) {
             telemetry.addLine("  NOTHING.");
             telemetry.addLine("  The names in your configuration do not match any name");
             telemetry.addLine("  this code looks for. Check spelling and underscores.");
         } else {
             for (String n : foundNames) telemetry.addLine("  OK  " + n);
             for (String n : foundServoNames) telemetry.addLine("  OK  " + n);
+            for (String n : foundPositionServoNames) telemetry.addLine("  OK  " + n);
         }
         if (!missingNames.isEmpty()) {
             telemetry.addLine();
@@ -152,7 +179,7 @@ public class HardwareCheck extends LinearOpMode {
         telemetry.update();
 
         waitForStart();
-        int count = foundMotors.size() + foundServos.size();
+        int count = foundMotors.size() + foundServos.size() + foundPositionServos.size();
         if (isStopRequested() || count == 0) return;
 
         int selected = 0;
@@ -180,14 +207,22 @@ public class HardwareCheck extends LinearOpMode {
                 int globalIndex = foundMotors.size() + i;
                 foundServos.get(i).setPower(globalIndex == selected && spin ? 0.3 : 0.0);
             }
+            for (int i = 0; i < foundPositionServos.size(); i++) {
+                int globalIndex = foundMotors.size() + foundServos.size() + i;
+                foundPositionServos.get(i).setPosition(globalIndex == selected && spin
+                        ? Shooter.GATE_OPEN_POSITION : Shooter.GATE_CLOSED_POSITION);
+            }
 
-            telemetry.addLine("Bumpers pick a device.  Hold A to spin it slowly.");
+            telemetry.addLine("Bumpers pick a device.  Hold A to move it slowly.");
             telemetry.addLine();
             int idx = 0;
             for (String n : foundNames) telemetry.addLine((idx++ == selected ? "  > " : "    ") + n);
             for (String n : foundServoNames) telemetry.addLine((idx++ == selected ? "  > " : "    ") + n);
+            for (String n : foundPositionServoNames) {
+                telemetry.addLine((idx++ == selected ? "  > " : "    ") + n);
+            }
             telemetry.addLine();
-            telemetry.addLine(spin ? "SPINNING" : "stopped");
+            telemetry.addLine(spin ? "MOVING" : "stopped");
             telemetry.addLine();
             telemetry.addLine("Watch which wheel turns. Write it down. If the wheel that");
             telemetry.addLine("turns is not the one named above, two motors are plugged");
@@ -197,5 +232,6 @@ public class HardwareCheck extends LinearOpMode {
 
         for (DcMotor m : foundMotors) m.setPower(0);
         for (CRServo s : foundServos) s.setPower(0);
+        for (Servo s : foundPositionServos) s.setPosition(Shooter.GATE_CLOSED_POSITION);
     }
 }

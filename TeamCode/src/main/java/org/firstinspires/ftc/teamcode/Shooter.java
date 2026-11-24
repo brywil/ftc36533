@@ -6,23 +6,27 @@ import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.PIDFCoefficients;
+import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import java.util.Locale;
 
 /**
  * The launcher (flywheel) that shoots POLLEN at the HIVE, plus the windmill that feeds
- * balls into it. Both are driven by the distance the Limelight reports to a target's
- * AprilTag.
+ * balls into it and the safety gate that blocks the feed when we are not shooting.
  *
  * Robot Configuration names expected on the Control Hub:
  *
- *     launcher        windmill
+ *     launcher        windmill        shooter_gate
  *
  * These match goBILDA's own BIOBUZZ StarterBot example code, so one Robot Configuration
  * drives both their sample and this code. The kit's launcher is a 5203 Yellow Jacket
  * with an encoder, so -- unlike the rest of the robot -- this mechanism is CLOSED LOOP.
- * The windmill is a continuous-rotation servo.
+ * The windmill is a continuous-rotation servo; the gate is a positional servo.
+ *
+ * THE GATE. Open = LEFT limit (0.0), closed = RIGHT limit (1.0), as measured on this
+ * robot. It is closed at init and opens only for a FORWARD feed; zero or reverse leaves
+ * it closed. Every OpMode feeds through setFeed(), so no caller can forget it.
  *
  * WHY VELOCITY, NOT POWER.
  *
@@ -41,18 +45,27 @@ import java.util.Locale;
  * rather than extrapolating, because that is where a shot becomes a guess.
  *
  * FAIL CLOSED. Until MIN_POINTS are recorded rangeToVelocity() returns null and the
- * OpModes refuse to fire. A missing launcher or windmill is harmless -- tryGet returns
- * null and the relevant methods no-op.
+ * OpModes refuse to fire. A missing launcher, windmill or gate is harmless -- tryGet
+ * returns null and the relevant methods no-op.
  */
 public class Shooter {
 
     public static final String LAUNCHER = "launcher";
     public static final String WINDMILL = "windmill";
+    public static final String GATE     = "shooter_gate";
 
     /** Flip if the wheel spins the wrong way for the ball to leave forward. */
     private static final boolean LAUNCHER_REVERSE = false;
     /** Flip if the windmill pushes balls away from the wheel instead of into it. */
     private static final boolean WINDMILL_REVERSE = true;   // goBILDA's kit reverses it
+
+    /**
+     * Gate endpoints, measured on this robot: OPEN is the LEFT limit (0.0), CLOSED is
+     * the RIGHT limit (1.0). Swap the two if the linkage is ever flipped -- a positional
+     * servo has no direction to flip, only these positions.
+     */
+    public static final double GATE_OPEN_POSITION   = 0.0;
+    public static final double GATE_CLOSED_POSITION = 1.0;
 
     /**
      * PIDF for the velocity loop. These are goBILDA's values from their BIOBUZZ
@@ -102,6 +115,10 @@ public class Shooter {
 
     private final DcMotorEx launcher;
     private final CRServo windmill;
+    private final Servo gate;
+
+    /** True after the gate has been commanded open; avoids re-sending it every loop. */
+    private boolean gateOpen = false;
 
     /** Battery voltage sensor, if this hub has one. Only used to record calibration conditions. */
     private final VoltageSensor battery;
@@ -116,6 +133,7 @@ public class Shooter {
         // configured as a plain motor.
         launcher = hardwareMap.tryGet(DcMotorEx.class, LAUNCHER);
         windmill = hardwareMap.tryGet(CRServo.class, WINDMILL);
+        gate     = hardwareMap.tryGet(Servo.class, GATE);
 
         // The Control Hub reports battery voltage; a phone + expansion hub may list more
         // than one. Any of them is fine -- it is only recorded with calibration points.
@@ -142,10 +160,17 @@ public class Shooter {
                     ? DcMotorSimple.Direction.REVERSE : DcMotorSimple.Direction.FORWARD);
             windmill.setPower(0);
         }
+        if (gate != null) {
+            // Closed before START: no ball can reach the wheel until we ask to feed.
+            gate.setPosition(GATE_CLOSED_POSITION);
+            gateOpen = false;
+        }
     }
 
     public boolean hasLauncher() { return launcher != null; }
     public boolean hasWindmill() { return windmill != null; }
+    public boolean hasGate()     { return gate != null; }
+    public boolean isGateOpen()  { return gateOpen; }
 
     /** True when the wheel is spinning fast enough that a ball would leave cleanly. */
     public boolean isSpunUp() {
@@ -196,12 +221,26 @@ public class Shooter {
 
     public void stopLauncher() { setVelocity(0); }
 
-    /** Run the windmill to push a ball into the wheel. +1 feed, -1 reverse, 0 stop. */
+    /**
+     * Run the windmill to push a ball into the wheel. +1 feed, -1 reverse, 0 stop.
+     *
+     * The gate follows the FORWARD feed only: it opens when a shot is being fed and
+     * returns to the closed limit for zero or reverse. This is the single choke point
+     * every OpMode uses, so the gate cannot be left open after the windmill stops.
+     */
     public void setFeed(double power) {
-        if (windmill != null) windmill.setPower(clamp(power));
+        double p = clamp(power);
+        if (windmill != null) windmill.setPower(p);
+        setGate(p > 0.0);
     }
 
-    /** Everything off. Call when the OpMode ends. */
+    private void setGate(boolean open) {
+        if (gate == null || gateOpen == open) return;
+        gate.setPosition(open ? GATE_OPEN_POSITION : GATE_CLOSED_POSITION);
+        gateOpen = open;
+    }
+
+    /** Everything off. Call when the OpMode ends; this also closes the gate. */
     public void stop() {
         stopLauncher();
         setFeed(0);

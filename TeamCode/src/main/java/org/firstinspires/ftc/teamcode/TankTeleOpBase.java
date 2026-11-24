@@ -177,6 +177,7 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                 ? "in config -- live link after START" : "MISSING -- aim disabled");
         telemetry.addData("launcher", shooter.shooter().hasLauncher() ? "OK" : "MISSING");
         telemetry.addData("windmill", shooter.shooter().hasWindmill() ? "OK" : "MISSING");
+        telemetry.addData("gate", shooter.shooter().hasGate() ? "OK" : "MISSING");
         telemetry.addData("shooter base (saved)", "%.0f ticks/s  trim %+.0f",
                 shooter.getManualVelocity(), shooter.getAutoTrimVelocity());
         telemetry.update();
@@ -343,6 +344,9 @@ public abstract class TankTeleOpBase extends LinearOpMode {
                     deg(lastFrameBearingDeg), deg(bearing),
                     lastAimHigh ? "   [HIGH CELL centre]" : "");
             telemetry.addData("shoot", shooting ? "FIRING (intake + feed)" : "off (hold RB)");
+            telemetry.addData("gate", shooter.shooter().hasGate()
+                    ? (shooter.shooter().isGateOpen() ? "OPEN (left)" : "CLOSED (right)")
+                    : "MISSING");
             telemetry.addLine();
             telemetry.addLine("Left stick drives.  RT = auto-aim only, RB = auto-aim + shoot.");
             telemetry.addLine("LB intake only   square reverse   dpad up/down = speed");

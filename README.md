@@ -126,6 +126,7 @@ front_left   front_right   back_left   back_right      DcMotor
 intake                                                 DcMotor
 launcher                                               DcMotorEx (encoder)
 left_intake_servo   right_intake_servo   windmill       CRServo
+shooter_gate                                           Servo (positional)
 imu                                                    built into the Control Hub
 limelight                                              Ethernet Device -> Limelight3A
 ```
@@ -157,6 +158,7 @@ left_drive   right_drive                              DcMotor
 intake                                                 DcMotor
 launcher                                               DcMotorEx (encoder)
 left_intake_servo   right_intake_servo   windmill       CRServo
+shooter_gate                                           Servo (positional)
 limelight                                              Ethernet Device -> Limelight3A
 ```
 
@@ -196,7 +198,9 @@ exist on the StarterBot and were silently inert; they are gone.
 
 ### The launcher (shooter)
 
-`Shooter` owns the launcher (`launcher`) and the feed servo (`windmill`). It turns a
+`Shooter` owns the launcher (`launcher`), the feed servo (`windmill`), and the safety
+gate (`shooter_gate`). The gate is a positional servo: open is the LEFT limit (`0.0`),
+closed is the RIGHT limit (`1.0`), and it opens only for a forward feed. It turns a
 distance into a launcher **speed** so a shot travels that far. Run
 `5. Shooter Calibrate` to measure the distance→speed points, then `6. Shooter
 (Limelight)` to shoot using them.
