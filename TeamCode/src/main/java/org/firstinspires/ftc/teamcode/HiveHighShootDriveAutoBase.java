@@ -27,20 +27,45 @@ import java.util.Locale;
  * WHY WAIT AT ALL. The HIVE is a seesaw that only rests at two endpoints. A TIP is the
  * down-CELL becoming the up-CELL and settling there -- the Limelight reports that as a
  * settled observation in {@link HiveGeometry.Slot.HIGH}. Feeding before it gets there
- * throws at a moving target. This waits for that exact transition, using the very same
- * gate as {@link LimelightHiveTracker} / {@link HiveGate} (tilt AND height agreeing), and
- * requires the CELL to have been seen settled LOW first, so a strange initial state
- * cannot be mistaken for a tip.
+ * throws at a moving target. This waits for a settled HIGH, using the very same gate as
+ * {@link LimelightHiveTracker} / {@link HiveGate} (tilt AND height agreeing).
  *
- * IF IT NEVER HAPPENS. It waits up to WAIT_FOR_HIGH_MS (20 s); when that runs out it
- * SKIPS the feed and does the movement anyway, so the robot still leaves. A HIVE that
- * never reports HIGH is more likely a camera/tag problem than a scoring opportunity, and
- * firing blind just wastes balls. Telemetry says which path it took.
+ * SETTLED HIGH IS THE TRIGGER; LOW FIRST IS ONLY EXTRA EVIDENCE. It used to insist on
+ * seeing the CELL settled LOW before the tip, and that is what stopped both support
+ * autos from firing: at START the camera is looking at the goal from an angle, the
+ * watched CELL is behind the field structure, or the robot is still being placed -- so
+ * LOW is never seen. By the time the tags do appear, the CELL is already up, and the
+ * auto sat there through the whole match and skipped the feed.
+ *
+ * BOTH ALLIANCES WATCH A CELL THAT STARTS **DOWN**, which is what makes firing on the
+ * first settled HIGH safe: RED watches RED SCORING (down at staging) and BLUE watches
+ * BLUE AUDIENCE (down at staging) -- see the subclasses and manual Fig 10-2. So a HIGH
+ * on first sight means either the partner tipped the HIVE while we were not looking, or
+ * it was already tipped before START; either way our scoring CELL is UP and it is the
+ * right one to shoot into. The LOW-first path is still reported when it is seen, because
+ * that is the proof the tip really happened.
+ *
+ * IF IT SEES NOTHING AT ALL. It fires the feed anyway, two ways:
+ *
+ *   - nothing of our CELL in view for FIRE_BLIND_AFTER_MS (8 s) -- a camera problem, a
+ *     CELL empty from the last match, or a partner who tipped at once. The feed is the
+ *     only thing that scores, and a skipped feed scores nothing, so the robot shoots
+ *     what it has and still runs the drive;
+ *   - our CELL in view but never settling HIGH by WAIT_FOR_HIGH_MS (12 s) -- a CELL held
+ *     mid-tip, or a gate that refuses an oblique view.
+ *
+ * THE TRADE-OFF, STATED PLAINLY. Firing blind can throw balls at a CELL that is still
+ * down, which wastes them. That is accepted deliberately: the alternative (the 2026-11-20
+ * behaviour) was to sit out the whole AUTO and score nothing whenever the camera did not
+ * see the start pose, which is strictly worse. The report line says which path was taken
+ * ("tip seen", "HIGH seen first", "no tags -- fired anyway"), so a bad run can be told
+ * apart from a lucky one. The 8 s / 12 s caps also keep feed + drive inside the 30 s.
  *
  * SEQUENCE, on START:
  *   1. spin the launcher up and KEEP it spinning for the whole OpMode;
- *   2. wait for our CELL to go SETTLED LOW -> SETTLED HIGH (a TIP), up to 20 s;
- *   3. when it reaches HIGH: run the intake AND the indexer (windmill) for FEED_DURATION_MS;
+ *   2. wait for a settled HIGH -- or, failing that, up to 8 s with nothing in view, or
+ *      12 s with the CELL in view but never settling;
+ *   3. run the intake AND the indexer (windmill) for FEED_DURATION_MS -- always;
  *   4. drive at MOVEMENT_POWER: forward 0.5, RIGHT 90, forward 2, then reverse 0.2;
  *   5. stop and report.
  *
@@ -58,8 +83,19 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
 
     // --- Wait -----------------------------------------------------------------
 
-    /** How long to wait for our CELL to reach HIGH before giving up. */
-    public static final long WAIT_FOR_HIGH_MS = 20000;
+    /**
+     * How long to keep waiting for a settled HIGH while our CELL is actually in view.
+     * When it runs out we fire anyway: a skipped feed scores nothing, and the 5 s feed
+     * plus the drive still have to fit in the 30 s AUTO.
+     */
+    public static final long WAIT_FOR_HIGH_MS = 12000;
+
+    /**
+     * If NONE of our CELL has been in view for this long, the tip will never be seen.
+     * Fire blind instead of waiting out WAIT_FOR_HIGH_MS at a camera that sees nothing.
+     * 8 s leaves room for a partner who tips late, and for the feed + drive after it.
+     */
+    public static final long FIRE_BLIND_AFTER_MS = 8000;
 
     // --- Shooting -------------------------------------------------------------
 
@@ -99,7 +135,7 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
         ticksPerInch = ForwardAndTurnAuto.TICKS_PER_WHEEL_REV
                 / (Math.PI * ForwardAndTurnAuto.WHEEL_DIAMETER_IN);
 
-        telemetry.addLine("Auto: spin launcher, wait for " + scoringCell() + " to reach HIGH, feed, then drive.");
+        telemetry.addLine("Auto: spin launcher, wait for " + scoringCell().clusterName + " to be UP, feed, then drive.");
         telemetry.addLine("WHEELS OFF THE GROUND for the first run. Launcher spins on START.");
         telemetry.addLine();
         telemetry.addData("limelight", tracker.hasLimelight() ? "OK" : "MISSING");
@@ -122,13 +158,15 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
         shooter.setManualVelocity(LAUNCH_VELOCITY);
         shooter.update(null);
 
-        boolean high = waitForHigh();
+        Tip tip = waitForTip();
         boolean fed = false;
 
-        if (high) {
-            // It reached HIGH: run the intake AND the indexer (windmill) together for
-            // FEED_DURATION_MS. No spin-up wait needed -- the wheel has been running
-            // the whole time.
+        // SHOOT UNLESS THE OPMODE WAS STOPPED. A settled HIGH, a HIGH with no LOW before
+        // it, or either give-up timer all end in the feed: skipping it scores nothing,
+        // and the feed plus the drive still have to fit inside the 30 s AUTO.
+        if (tip != Tip.STOPPED) {
+            // The wheel has been running the whole time, so there is no spin-up wait --
+            // run the intake AND the indexer (windmill) together for FEED_DURATION_MS.
             shooter.shooter().setFeed(1.0);
             intake.setPower(FEED_INTAKE_POWER);
             long feedBegin = System.currentTimeMillis();
@@ -144,9 +182,6 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
             shooter.shooter().setFeed(0.0);
             intake.stop();
             fed = true;
-        } else {
-            telemetry.addLine("HIVE never reached HIGH in 20 s -- skipping the feed.");
-            telemetry.update();
         }
 
         // The launcher keeps spinning through the movement, per "spinning up the entire
@@ -167,7 +202,7 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
         shooter.stop();
         tracker.close();
 
-        telemetry.addData("TIP seen", high ? "yes" : "no -- feed skipped");
+        telemetry.addData("tip", tip.message());
         telemetry.addData("feed", fed ? "fed 5 s" : "not fed");
         telemetry.addData("forward 0.5", fwd1);
         telemetry.addData("turn right 90", turnR);
@@ -178,46 +213,101 @@ public abstract class HiveHighShootDriveAutoBase extends LinearOpMode {
     }
 
     /**
-     * Wait until our target CELL has gone from settled LOW to settled HIGH -- the TIP --
-     * or WAIT_FOR_HIGH_MS passes. Returns true if a full tip was seen.
-     *
-     * REQUIRING LOW FIRST IS THE POINT. Firing on "HIGH" alone would fire on the staged
-     * pose for whichever alliance starts with that CELL up, before any tip happened. The
-     * partner tips the HIVE after START and the robot scores into the CELL that comes UP,
-     * so seeing it DOWN first proves the tip really occurred.
+     * How the wait for the tip ended. Every value except STOPPED means "fire": the point
+     * of this auto is to score, and a skipped feed scores nothing.
      */
-    private boolean waitForHigh() {
+    private enum Tip {
+        /** Our CELL settled LOW, then settled HIGH: a real TIP, and it was watched. */
+        TIPPED,
+        /** First sight of our CELL was already settled HIGH -- tipped unseen. Both
+         *  support autos watch a CELL that starts DOWN, so this is still our up CELL. */
+        HIGH_ONLY,
+        /** Nothing of our CELL in view for FIRE_BLIND_AFTER_MS: fire blind. */
+        BLIND,
+        /** Our CELL was in view but never settled HIGH by WAIT_FOR_HIGH_MS: fire anyway. */
+        NEVER_HIGH,
+        /** The OpMode was stopped while waiting; do not start the feed. */
+        STOPPED;
+
+        /** One short line for the run report. */
+        String message() {
+            switch (this) {
+                case TIPPED:     return "tip seen (LOW -> HIGH)";
+                case HIGH_ONLY:  return "HIGH seen first -- fired (cell starts DOWN)";
+                case BLIND:      return "no tags -- fired anyway (blind)";
+                case NEVER_HIGH: return "never settled HIGH -- fired anyway";
+                default:         return "stopped before the feed";
+            }
+        }
+    }
+
+    /**
+     * Wait until our target CELL is settled HIGH -- the TIP -- or until one of the two
+     * give-up deadlines passes, and report which happened.
+     *
+     * A SETTLED HIGH IS ENOUGH, WITH OR WITHOUT A LOW BEFORE IT. Requiring the LOW was
+     * what stopped this auto from firing: at START the camera often cannot see the
+     * watched CELL at all, so by the time the tags appear the CELL is already up. Since
+     * BOTH support autos watch a CELL that starts DOWN, a HIGH on first sight can only
+     * mean our scoring CELL is up -- shoot it.
+     *
+     * The two deadlines, and why they are different:
+     *
+     *   - nothing of our CELL in view for FIRE_BLIND_AFTER_MS (8 s): the tip was never
+     *     going to be seen, so stop waiting and shoot;
+     *   - our CELL in view but never settling HIGH by WAIT_FOR_HIGH_MS (12 s): a CELL
+     *     held mid-tip or a gate refusing an oblique view, so stop waiting and shoot.
+     *
+     * A CELL that blinks out and back does not restart the blind timer -- only time with
+     * nothing in view counts -- so a flaky tag does not push the start of the feed late.
+     */
+    private Tip waitForTip() {
         long begin = System.currentTimeMillis();
+        long lastSeenAt = begin;
         boolean sawLow = false;
+        boolean sawAny = false;
+
         while (opModeIsActive()) {
-            long elapsed = System.currentTimeMillis() - begin;
+            long now = System.currentTimeMillis();
+            long elapsed = now - begin;
 
             List<LimelightHiveTracker.Observation> obs = tracker.observe();
-            boolean found = false;
+            boolean inView = false;
+            boolean high = false;
             String lastSeen = "none in view";
             for (LimelightHiveTracker.Observation o : obs) {
                 if (o.cell != scoringCell()) continue;
-                lastSeen = String.format(Locale.US, "tilt %+.1f  slot %s  %s",
-                        o.tiltDeg, o.slot, o.settled ? "settled" : "moving");
-                if (o.settled && o.slot == HiveGeometry.Slot.LOW) {
-                    sawLow = true;
-                }
-                if (o.settled && o.slot == HiveGeometry.Slot.HIGH && sawLow) {
-                    found = true;
-                    break;
-                }
+                inView = true;
+                lastSeen = String.format(Locale.US, "tilt %+.1f  slot %s  %s%s",
+                        o.tiltDeg, o.slot,
+                        o.settled ? "settled" : "moving",
+                        o.rejectReason == null ? "" : "  (" + o.rejectReason + ")");
+                if (o.settled && o.slot == HiveGeometry.Slot.LOW) sawLow = true;
+                if (o.settled && o.slot == HiveGeometry.Slot.HIGH) high = true;
+            }
+            if (inView) {
+                sawAny = true;
+                lastSeenAt = now;
             }
 
-            telemetry.addData("waiting for TIP", "%d / %d ms  (seen LOW: %s)",
-                    elapsed, WAIT_FOR_HIGH_MS, sawLow ? "yes" : "not yet");
+            // Settled HIGH: our scoring CELL is up. LOW first is reported, not required.
+            if (high) return sawLow ? Tip.TIPPED : Tip.HIGH_ONLY;
+
+            long unseen = now - lastSeenAt;
+            long shown = Math.min(elapsed, WAIT_FOR_HIGH_MS);
+
+            telemetry.addData("waiting for TIP", "%d / %d ms  (LOW seen: %s)",
+                    shown, WAIT_FOR_HIGH_MS, sawLow ? "yes" : "not yet");
             telemetry.addData("  " + scoringCell().clusterName, lastSeen);
+            telemetry.addData("  fire blind in", sawAny ? "-- (tags in view)" : "%d ms",
+                    Math.max(0, FIRE_BLIND_AFTER_MS - unseen));
             telemetry.update();
 
-            if (found) return true;
-            if (elapsed >= WAIT_FOR_HIGH_MS) return false;
+            if (!sawAny && unseen >= FIRE_BLIND_AFTER_MS) return Tip.BLIND;
+            if (elapsed >= WAIT_FOR_HIGH_MS) return Tip.NEVER_HIGH;
             idle();
         }
-        return false;
+        return Tip.STOPPED;
     }
 
     private int turnTicks() {
