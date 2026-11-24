@@ -24,9 +24,10 @@ import java.util.Locale;
  * with an encoder, so -- unlike the rest of the robot -- this mechanism is CLOSED LOOP.
  * The windmill is a continuous-rotation servo; the gate is a positional servo.
  *
- * THE GATE. Open = LEFT limit (0.0), closed = RIGHT limit (1.0), as measured on this
- * robot. It is closed at init and opens only for a FORWARD feed; zero or reverse leaves
- * it closed. Every OpMode feeds through setFeed(), so no caller can forget it.
+ * THE GATE. Open = RIGHT limit (1.0), closed = LEFT, backed off to 0.10 so the servo
+ * does not strain against the stop. It is closed at init and opens only for a FORWARD
+ * feed; zero or reverse leaves it closed. Every OpMode feeds through setFeed(), so no
+ * caller can forget it.
  *
  * WHY VELOCITY, NOT POWER.
  *
@@ -60,12 +61,13 @@ public class Shooter {
     private static final boolean WINDMILL_REVERSE = true;   // goBILDA's kit reverses it
 
     /**
-     * Gate endpoints, measured on this robot: OPEN is the LEFT limit (0.0), CLOSED is
-     * the RIGHT limit (1.0). Swap the two if the linkage is ever flipped -- a positional
-     * servo has no direction to flip, only these positions.
+     * Gate endpoints, measured on this robot: OPEN is the RIGHT limit (1.0), CLOSED is
+     * the LEFT end, backed off to 0.10 so it does not drive into the mechanical stop.
+     * If the gate does not quite clear the ball when open, raise the open value; if it
+     * does not quite block when closed, lower the closed value toward 0.0.
      */
-    public static final double GATE_OPEN_POSITION   = 0.0;
-    public static final double GATE_CLOSED_POSITION = 1.0;
+    public static final double GATE_OPEN_POSITION   = 1.0;
+    public static final double GATE_CLOSED_POSITION = 0.10;
 
     /**
      * PIDF for the velocity loop. These are goBILDA's values from their BIOBUZZ

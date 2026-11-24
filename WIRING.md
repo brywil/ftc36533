@@ -98,10 +98,9 @@ the wrong port entirely):
 | `windmill` | **reversed** | `Shooter.WINDMILL_REVERSE` |
 | `left_drive`, `intake`, `launcher`, `left_intake_servo` | forward | — |
 
-The gate is a **positional** servo, not a CR servo, so it has no direction to reverse:
-**open is the LEFT limit** (`Shooter.GATE_OPEN_POSITION = 0.0`) and **closed is the
-RIGHT limit** (`Shooter.GATE_CLOSED_POSITION = 1.0`). Swap those two values if the
-linkage is ever flipped.
+The gate is a **positional** servo, not a CR servo: **open is the RIGHT limit**
+(`Shooter.GATE_OPEN_POSITION = 1.0`) and **closed is the LEFT end**, backed off to
+`0.10` (`Shooter.GATE_CLOSED_POSITION`) so the servo does not strain against the stop.
 
 Test on blocks first: left stick forward, **both wheels must spin forward**
 (`GETTING_STARTED.md` Part 3).

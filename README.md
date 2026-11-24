@@ -199,9 +199,9 @@ exist on the StarterBot and were silently inert; they are gone.
 ### The launcher (shooter)
 
 `Shooter` owns the launcher (`launcher`), the feed servo (`windmill`), and the safety
-gate (`shooter_gate`). The gate is a positional servo: open is the LEFT limit (`0.0`),
-closed is the RIGHT limit (`1.0`), and it opens only for a forward feed. It turns a
-distance into a launcher **speed** so a shot travels that far. Run
+gate (`shooter_gate`). The gate is a positional servo: open is the RIGHT limit (`1.0`),
+closed is the LEFT end backed off to `0.10`, and it opens only for a forward feed. It
+turns a distance into a launcher **speed** so a shot travels that far. Run
 `5. Shooter Calibrate` to measure the distance→speed points, then `6. Shooter
 (Limelight)` to shoot using them.
 
