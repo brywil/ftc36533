@@ -172,6 +172,24 @@ public final class HiveGeometry {
     public static final int CLUSTER_MEMBER_COUNT = 4;
 
     /**
+     * X offset of each cluster member from the CELL's cluster centre, in inches, in
+     * member order (base ID first). Taken from the SDK's own BIOBUZZ cluster metadata
+     * (`AprilTagGameDatabase.getBioBuzzCluster`): x = -6.5, -2.75, +2.75, +6.5 -- the
+     * 13 in. baseline. The y/z offsets are the same for all four, so only x changes
+     * the bearing and the constant part cancels out of an aim correction.
+     */
+    public static final double[] CLUSTER_MEMBER_X_IN = { -6.5, -2.75, 2.75, 6.5 };
+
+    /** The known cluster x offset for this tag ID, or 0 when it is not a HIVE tag. */
+    public static double clusterMemberX(int tagId) {
+        Cell cell = Cell.fromTagId(tagId);
+        if (cell == null) return 0.0;
+        int index = tagId - cell.baseId;
+        return (index >= 0 && index < CLUSTER_MEMBER_X_IN.length)
+                ? CLUSTER_MEMBER_X_IN[index] : 0.0;
+    }
+
+    /**
      * Reject solves seen at a steep incidence to the tag plane. The tags lean 30 deg
      * outward, so this is far less restrictive than it sounds -- at 6 ft of standoff
      * the incidence is only about 46 deg on the low CELL and 33 deg on the high one.

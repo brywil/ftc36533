@@ -411,7 +411,8 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         long feedStart = 0L;
         long aimStart = 0L;          // set the first time a tag is seen
         boolean everAimed = false;
-        boolean lastCenter = false;  // whether the last bearing was the HIVE centre
+        boolean lastTargetOpposite = false;  // last target was the AUDIENCE/high CELL
+        HiveAim hiveAim = new HiveAim();
 
         // Rolling windows over the last few frames, so the aim does not chase the
         // per-frame change in which tags were detected (see AIM_SMOOTH_FRAMES).
@@ -424,60 +425,54 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
         while (opModeIsActive()) {
             long now = System.currentTimeMillis();
 
-            // Aim at the MIDDLE of OUR goal's tags -- not at one of them, and not at
-            // every tag in view. Aiming at the nearest tag lets the choice flip between
-            // adjacent members as their ranges cross, so the bearing jumps between them
-            // and the robot dithers and never settles. Averaging the cluster's bearings
-            // cancels that, and the per-tag camera noise with it. The range is the
-            // cluster's mean distance, because the shot leaves towards that cluster.
-            //
-            // IF OUR SCORING CELL IS THE ONE THAT IS UP, that rule changes: the target
-            // becomes the middle of the HIVE, not the middle of that CELL's sticker. The
-            // two CELLs hang either side of the pivot, so the midpoint of their cluster
-            // means is the pivot. This uses the tag IDs to group by CELL and the
-            // tilt/height gate to know which CELL is up; a partial cluster is enough.
-            //
-            // Otherwise the cluster filter is the point of the split: another cluster in
-            // view -- the opponent's goal, or an AUDIENCE sticker -- must not pull the
-            // aim towards the midpoint between two goals.
+            // Aim at the centre of the UP CELL of our HIVE, whichever end that is.
+            // HiveAim corrects every visible member by its known offset on the sticker,
+            // so a single tag is enough and two tags agree instead of pulling toward
+            // whichever member happened to be detected. The opponent's HIVE is never
+            // accepted; the AUDIENCE cluster here is the other end of OUR HIVE.
             HiveGeometry.Cell want = scoringCell();
             List<LimelightHiveTracker.Tag> tags = tracker.recognize();
             List<LimelightHiveTracker.Tag> goalTags = new ArrayList<>();
-            double sumTx = 0.0, sumRange = 0.0, oppositeSumTx = 0.0;
-            int nTx = 0, nRange = 0, nOpposite = 0;
+            List<LimelightHiveTracker.Tag> oppositeTags = new ArrayList<>();
+            double goalRangeSum = 0.0, oppositeRangeSum = 0.0;
+            int nTx = 0, goalRangeN = 0, oppositeRangeN = 0;
             for (LimelightHiveTracker.Tag t : tags) {
                 if (t.cell == want) {
                     goalTags.add(t);
-                    sumTx += t.txDeg;
                     nTx++;
                     if (!Double.isNaN(t.rangeIn)) {
-                        sumRange += t.rangeIn;
-                        nRange++;
+                        goalRangeSum += t.rangeIn;
+                        goalRangeN++;
                     }
                 } else if (t.cell == want.opposite()) {
-                    oppositeSumTx += t.txDeg;
-                    nOpposite++;
+                    oppositeTags.add(t);
+                    if (!Double.isNaN(t.rangeIn)) {
+                        oppositeRangeSum += t.rangeIn;
+                        oppositeRangeN++;
+                    }
                 }
             }
 
-            boolean center = nTx > 0
-                    && LimelightHiveTracker.knownSlot(goalTags) == HiveGeometry.Slot.HIGH
-                    && nOpposite > 0;
-            double frameBearing = 0.0;
-            if (nTx > 0) {
-                frameBearing = sumTx / nTx;
-                if (center) frameBearing = (frameBearing + oppositeSumTx / nOpposite) / 2.0;
-            }
+            hiveAim.learnSign(tags);
+
+            HiveGeometry.Cell high = hiveAim.highCell(want, goalTags, oppositeTags);
+            boolean highTarget = high != null;
+            boolean targetOpposite = high == want.opposite();
+            List<LimelightHiveTracker.Tag> targetTags =
+                    targetOpposite ? oppositeTags : goalTags;
+            Double frameBearing = hiveAim.centerBearing(targetTags);
+            double sumRange = targetOpposite ? oppositeRangeSum : goalRangeSum;
+            int nRange = targetOpposite ? oppositeRangeN : goalRangeN;
 
             // Average the frame's target bearing with the last few frames, so a frame
             // that saw one member instead of two does not yank the aim across. A switch
-            // between the CELL and the HIVE centre starts a new window: blending those
-            // two targets would put the aim between them.
+            // between the two CELLs starts a new window: blending them would aim
+            // between the two ends of the HIVE.
             Double bearing;
-            if (nTx > 0) {
-                if (center != lastCenter) {
+            if (frameBearing != null) {
+                if (targetOpposite != lastTargetOpposite) {
                     bearingCount = 0; bearingNext = 0;
-                    lastCenter = center;
+                    lastTargetOpposite = targetOpposite;
                 }
                 bearingWin[bearingNext] = frameBearing;
                 bearingNext = (bearingNext + 1) % AIM_SMOOTH_FRAMES;
@@ -583,8 +578,9 @@ public abstract class ForwardOneAimAndShootAutoBase extends LinearOpMode {
                     ? "NONE of " + want.clusterName
                     : nTx + " of " + HiveGeometry.CLUSTER_MEMBER_COUNT
                       + "   " + describeGroup(goalTags));
-            telemetry.addData("aim target", center
-                    ? "HIVE centre (high CELL up)" : "goal CELL");
+            telemetry.addData("aim target", highTarget
+                    ? "HIGH CELL centre: " + high.clusterName
+                    : "goal CELL centre: " + want.clusterName);
             telemetry.addData("all tags", tags.isEmpty() ? "none" : describeGroup(tags));
             telemetry.addData("bearing", command.hasTarget
                     ? String.format(Locale.US, "%+.1f deg", command.bearingDeg) : "--");

@@ -270,6 +270,12 @@ drivetrain: the driver keeps the left stick, and the aim controller owns the tur
 only. Run it standalone first — the one thing you must see, not reason about, is
 whether the robot turns the **right way** toward the tag.
 
+In the match modes (`2a`/`2b` and `9red`/`9blue`) the target is the centre of the **UP
+CELL** of our HIVE, whichever end that is — not one tag and not the average of whichever
+tags happened to be visible. `HiveAim` corrects every visible member by its known offset
+on the 13 in. cluster sticker, so one tag is enough and two tags agree. Tilt and height
+decide which end is up; a partial cluster is enough to know that.
+
 **A lost target is a safety case.** When the tag leaves the frame the bearing does not
 exist, so the controller stops rather than turning on the last angle it saw. That
 matters because turning fast blurs the tag out of view, so "turn harder to recover" is
